@@ -60,7 +60,7 @@ object Main {
 
   def train(sc: SparkContext, config: CliOptions) {
     val tuples = readTuples(sc, config.gloveVectorsUrl.get)
-    val vectors = tuples.map(pair => Vectors.dense(pair._2)).persist()
+    val vectors = tuples.map(pair => Vectors.dense(pair._3)).persist()
 
     println("K-means clustering the words")
 
@@ -74,37 +74,35 @@ object Main {
   }
 
   def dump(sc: SparkContext, config: CliOptions) {
-    val tuples: RDD[(String, Vector)] = readTuples(sc, config.gloveVectorsUrl.get).map(pair => (pair._1, Vectors.dense(pair._2)))
+    val tuples: RDD[(Long, String, Vector)] = readTuples(sc, config.gloveVectorsUrl.get).map {
+        case(index, word, vector) => (index, word, Vectors.dense(vector))
+      }
+      .persist()
 
     val model = KMeansModel.load(sc, config.modelUrl.get.toString())
 
     //For each word with a vector, figure out which cluster that word belongs to, building
     //a RDD of (Int, String) tuples
-    val wordClusterAssignments: RDD[(Int, (String, Double))] = tuples.map { pair =>
-      val word = pair._1
-      val vector = pair._2
+    val wordClusterAssignments: RDD[(Int, (Long, String, Double))] = tuples.map { case(index,word,vector) =>
 
       val clusterGroupIndex = model.predict(vector)
       val distanceFromClusterCenter = Vectors.sqdist(model.clusterCenters(clusterGroupIndex), vector)
-      (clusterGroupIndex, (word, distanceFromClusterCenter))
+      (clusterGroupIndex, (index, word, distanceFromClusterCenter))
     }
 
     //Group the assignments so all words assigned to a given cluster are together
-    val clusterIndexWords: RDD[(Int, Iterable[(String, Double)])] = wordClusterAssignments.groupByKey()
+    val clusterIndexWords: RDD[(Int, Iterable[(Long, String, Double)])] = wordClusterAssignments.groupByKey()
 
-    //Find the nearest word to the center point of each cluster, and use that word to identify the cluster
-    //instead of its index
+    //For each cluster, find the word in that cluster with the lowest line number, since the vector file
+    //is sorted by word frequency this will allow us to choose the most common word in a group to represent
+    //that group
     val clusterWords: RDD[(String, Iterable[String])] = clusterIndexWords.map { pair =>
       val index: Int = pair._1
-      val words: Iterable[(String, Double)] = pair._2
+      val words: Iterable[(Long, String, Double)] = pair._2
 
-      val ordering = new Ordering[(String, Double)]() {
-        override def compare(x: (String, Double), y: (String, Double)): Int = Ordering[Double].compare(x._2, y._2)
-      }
+      val nearest = words.minBy(_._1)
 
-      val nearest = words.min(ordering)
-
-      (nearest._1, words.map(_._1))
+      (nearest._2, words.map(_._2))
     }
 
     clusterWords.map(pair => pair._1).collect().par.foreach { centerWord =>
@@ -122,12 +120,13 @@ object Main {
     }
   }
 
-  def readTuples(sc: SparkContext, path: URI): RDD[(String, Array[Double])] = {
+  def readTuples(sc: SparkContext, path: URI): RDD[(Long, String, Array[Double])] = {
     val file = sc.textFile(path.toString)
     val tuples = file
-      .map(line => line.split(" "))
-      .map(arr => (arr.head, arr.tail))
-      .map(pair => (pair._1, pair._2.map(_.toDouble)))
+      .zipWithIndex()
+      .map{case(line,index) => (index, line.split(" "))}
+      .map{case(index,arr) => (index, arr.head, arr.tail)}
+      .map{case(index, word, vector) => (index, word, vector.map(_.toDouble))}
 
     tuples
   }
