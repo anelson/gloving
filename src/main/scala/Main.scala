@@ -103,12 +103,12 @@ object Main {
       val nearest = words.minBy(_._1)
 
       (nearest._2, words.map(_._2))
-    }
+    }.persist()
 
     clusterWords.map(pair => pair._1).collect().par.foreach { centerWord =>
       println(s"Found cluster with center word $centerWord")
 
-      val wordsInCluster = clusterWords.filter(_._1 == centerWord).collect().head._2
+      val wordsInCluster = clusterWords.filter(_._1 == centerWord).first()._2
 
       val normalizedWord = centerWord.replaceAll("[^a-zA-Z0-9.-]", "_")
       val writer = new PrintWriter(new File(s"words/$normalizedWord.txt"))
@@ -123,10 +123,10 @@ object Main {
   def readTuples(sc: SparkContext, path: URI): RDD[(Long, String, Array[Double])] = {
     val file = sc.textFile(path.toString)
     val tuples = file
-      .zipWithIndex()
-      .map{case(line,index) => (index, line.split(" "))}
-      .map{case(index,arr) => (index, arr.head, arr.tail)}
-      .map{case(index, word, vector) => (index, word, vector.map(_.toDouble))}
+      .map{line => line.split(" ")}
+      .map{case(arr) => (arr.head, arr.tail)}
+      .map{case(index, arr) => (index, arr.head, arr.tail)}
+      .map{case(index, word, vector) => (index.toLong, word, vector.map(_.toDouble))}
 
     tuples
   }
