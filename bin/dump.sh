@@ -5,5 +5,5 @@ $SPARK_HOME/bin/spark-submit \
 	--master "local[4]" \
 	./target/scala-2.10/gloving-assembly-0.1.0-SNAPSHOT.jar \
 	dump \
-	--model ~/sources/spark-1.5.0-bin-hadoop2.6/kmeans.model \
+	--model data/kmeans-1000.model \
 	--vectors data/glove.6B.50d.txt.processed

@@ -67,7 +67,7 @@ object Main {
     val clusters = KMeans.train(vectors, config.numClusters, config.numIterations, 1, KMeans.K_MEANS_PARALLEL)
 
     println("Saving model")
-    clusters.save(sc, "kmeans.model")
+    clusters.save(sc, config.modelUrl.get.toString())
 
     val wsse = clusters.computeCost(vectors)
     println(s"WSSE: $wsse")
