@@ -14,6 +14,7 @@ import org.apache.spark.mllib.linalg.{Vectors, Vector}
 case class CliOptions(command: String = "",
   modelUrl: Option[URI] = None,
   gloveVectorsUrl: Option[URI] = None,
+  outputUrl: Option[URI] = None,
   numClusters: Int = 1000,
   numIterations: Int = 5)
 
@@ -31,6 +32,8 @@ object Main {
         c.copy(numClusters = x) } text("Number of clusters to model")
       opt[Int]('i', "iterations") optional() action { (x, c) =>
         c.copy(numIterations = x) } text("Number of iterations to train the model")
+      opt[URI]('o', "outputdir") required() action { (x, c) =>
+        c.copy(outputUrl = Some(x)) } text("URL at which output is written")
       checkConfig { c =>
         c.command match {
           case "train" => {
@@ -40,7 +43,12 @@ object Main {
             }
           }
 
-          case "dump" => success
+          case "dump" => {
+            c.outputUrl match {
+              case Some(_) => success
+              case None => failure("Dump requires an output directory to be specified")
+            }
+          }
 
           case _ => failure(s"Unrecognized command ${c.command}")
         }
@@ -64,7 +72,7 @@ object Main {
 
     println("K-means clustering the words")
 
-    val clusters = KMeans.train(vectors, config.numClusters, config.numIterations, 1, KMeans.K_MEANS_PARALLEL)
+    val clusters = KMeans.train(vectors, config.numClusters, config.numIterations, 1, KMeans.RANDOM)
 
     println("Saving model")
     clusters.save(sc, config.modelUrl.get.toString())
@@ -74,11 +82,13 @@ object Main {
   }
 
   def dump(sc: SparkContext, config: CliOptions) {
+    println("Loading tuples")
     val tuples: RDD[(Long, String, Vector)] = readTuples(sc, config.gloveVectorsUrl.get).map {
         case(index, word, vector) => (index, word, Vectors.dense(vector))
       }
       .persist()
 
+    println("Loading model")
     val model = KMeansModel.load(sc, config.modelUrl.get.toString())
 
     //For each word with a vector, figure out which cluster that word belongs to, building
@@ -96,15 +106,21 @@ object Main {
     //For each cluster, find the word in that cluster with the lowest line number, since the vector file
     //is sorted by word frequency this will allow us to choose the most common word in a group to represent
     //that group
-    val clusterWords: RDD[(String, Iterable[String])] = clusterIndexWords.map { pair =>
+    val clusterWords: RDD[(String, List[String])] = clusterIndexWords.map { pair =>
       val index: Int = pair._1
-      val words: Iterable[(Long, String, Double)] = pair._2
+      val words: List[(Long, String, Double)] = pair._2.toList
 
-      val nearest = words.minBy(_._1)
+      val sortedWords = words.sortBy(_._1)
 
-      (nearest._2, words.map(_._2))
+      val nearest = sortedWords.head
+
+      (nearest._2, sortedWords.map(_._2))
     }.persist()
 
+    //For S3 output, transform to an RDD of Iterable[String] lists, and write that to a text file
+    clusterWords.map(_._2).coalesce(1).saveAsTextFile(config.outputUrl.get.toString)
+
+/*
     clusterWords.map(pair => pair._1).collect().par.foreach { centerWord =>
       println(s"Found cluster with center word $centerWord")
 
@@ -118,15 +134,18 @@ object Main {
       }
       writer.close()
     }
+    */
   }
 
   def readTuples(sc: SparkContext, path: URI): RDD[(Long, String, Array[Double])] = {
     val file = sc.textFile(path.toString)
     val tuples = file
-      .map{line => line.split(" ")}
-      .map{case(arr) => (arr.head, arr.tail)}
-      .map{case(index, arr) => (index, arr.head, arr.tail)}
-      .map{case(index, word, vector) => (index.toLong, word, vector.map(_.toDouble))}
+      .repartition(sc.defaultParallelism * 3) //Because gzip-ed textfiles aren't splittable natively, oops!
+      .zipWithIndex()
+      .map{case(line,index) => (index, line.split(" "))}
+      .map{case(index,arr) => (index, arr.head, arr.tail)}
+      .map{case(index, word, vector) => (index, word, vector.map(_.toDouble))}
+
 
     tuples
   }
