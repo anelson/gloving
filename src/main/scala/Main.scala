@@ -32,7 +32,7 @@ object Main {
         c.copy(numClusters = x) } text("Number of clusters to model")
       opt[Int]('i', "iterations") optional() action { (x, c) =>
         c.copy(numIterations = x) } text("Number of iterations to train the model")
-      opt[URI]('o', "outputdir") required() action { (x, c) =>
+      opt[URI]('o', "outputdir") optional() action { (x, c) =>
         c.copy(outputUrl = Some(x)) } text("URL at which output is written")
       checkConfig { c =>
         c.command match {
@@ -106,19 +106,26 @@ object Main {
     //For each cluster, find the word in that cluster with the lowest line number, since the vector file
     //is sorted by word frequency this will allow us to choose the most common word in a group to represent
     //that group
-    val clusterWords: RDD[(String, List[String])] = clusterIndexWords.map { pair =>
+    val clusterWords: RDD[((Long, String), List[(Long, String)])] = clusterIndexWords.map { pair =>
       val index: Int = pair._1
-      val words: List[(Long, String, Double)] = pair._2.toList
+      val words: List[(Long, String)] = pair._2.map(x => (x._1, x._2)).toList
 
       val sortedWords = words.sortBy(_._1)
 
       val nearest = sortedWords.head
 
-      (nearest._2, sortedWords.map(_._2))
-    }.persist()
+      ((nearest._1, nearest._2), sortedWords)
+    }.sortBy(_._1._1)
+    .persist()
 
-    //For S3 output, transform to an RDD of Iterable[String] lists, and write that to a text file
-    clusterWords.map(_._2).coalesce(1).saveAsTextFile(config.outputUrl.get.toString)
+
+    //For S3 output, transform to an RDD of String, each String being a line with a list of words in a group
+    clusterWords.map { pair =>
+      val words = pair._2
+
+      words.map(x => s"${x._1}:${x._2}").mkString(",")
+    }.coalesce(1)
+    .saveAsTextFile(config.outputUrl.get.toString)
 
 /*
     clusterWords.map(pair => pair._1).collect().par.foreach { centerWord =>
@@ -140,8 +147,8 @@ object Main {
   def readTuples(sc: SparkContext, path: URI): RDD[(Long, String, Array[Double])] = {
     val file = sc.textFile(path.toString)
     val tuples = file
-      .repartition(sc.defaultParallelism * 3) //Because gzip-ed textfiles aren't splittable natively, oops!
       .zipWithIndex()
+      .repartition(sc.defaultParallelism * 3) //Because gzip-ed textfiles aren't splittable natively, oops!
       .map{case(line,index) => (index, line.split(" "))}
       .map{case(index,arr) => (index, arr.head, arr.tail)}
       .map{case(index, word, vector) => (index, word, vector.map(_.toDouble))}

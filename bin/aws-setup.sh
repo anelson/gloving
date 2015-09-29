@@ -11,4 +11,6 @@ upload_vectors glove.6B.50d.txt.gz
 upload_vectors glove.6B.300d.txt.gz
 upload_vectors glove.42B.300d.txt.gz
 
+aws s3 cp ./emr-config.json s3://gloving.data/config/emr-config.json
+
 aws emr create-default-roles
