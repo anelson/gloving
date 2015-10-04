@@ -1,6 +1,6 @@
 package gloving
 
-import java.net.URI
+import java.net.{URI, URL}
 import java.io.{File, PrintWriter}
 
 import scala.collection.mutable.{Map,HashMap}
@@ -57,7 +57,16 @@ object Analyze {
     val jsonAnalyses = analyses.map{ case(k,v) => (k, Json.toJson(v)) }
     val jsonObj = JsObject(jsonAnalyses.toSeq)
     val json = Json.prettyPrint(jsonObj)
-    println(json)
+
+    val file = new File(s"$name.json")
+    new PrintWriter(file) { write(json); close }
+
+    println(s"Wrote analysis to $file")
+
+    config.outputUrl.map { url =>
+      S3Helper.writeToS3(url.resolve(file.getName), file)
+    }
+
   }
 
   def analyze(words: RDD[WordVector]): VectorAnalysis = {

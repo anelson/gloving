@@ -71,6 +71,15 @@ libraryDependencies += "com.github.scopt" %% "scopt" % "3.3.0"
 
 libraryDependencies += "com.typesafe.play" %% "play-json" % "2.3.4"
 
+libraryDependencies += "com.amazonaws"    %  "aws-java-sdk-s3"  % "1.10.22"
+
+libraryDependencies += "org.slf4j" % "slf4j-api" % "1.7.12"
+libraryDependencies += "org.slf4j" % "slf4j-log4j12" % "1.7.12"
+libraryDependencies += "com.typesafe" %% "scalalogging-slf4j" % "1.1.0"
+
+//work around absurd AWS SDK issue https://github.com/aws/aws-sdk-java/issues/444
+libraryDependencies += "joda-time" % "joda-time" % "2.8.2"
+
 // testing
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.4" % "test"
 
