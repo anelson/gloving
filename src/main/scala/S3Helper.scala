@@ -5,7 +5,7 @@ import java.io.File
 import java.net.URI
 import java.nio.charset.StandardCharsets
 
-import com.amazonaws.auth.profile.ProfileCredentialsProvider
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain
 import com.amazonaws.regions._
 import com.amazonaws.services.s3._
 import com.amazonaws.services.s3.model._
@@ -23,7 +23,7 @@ object S3Helper {
 
 		logger.info(s"Writing file $contents with length ${contents.length} to ${url}")
 
-		val credentails = new ProfileCredentialsProvider().getCredentials()
+		val credentails = new DefaultAWSCredentialsProviderChain().getCredentials()
 
 		val s3Uri = new AmazonS3URI(url)
 		val client = new AmazonS3Client(credentails)

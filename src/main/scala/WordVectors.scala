@@ -1,6 +1,7 @@
 package gloving
 
 import java.net.URI
+import java.io.File
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
@@ -11,10 +12,15 @@ import org.apache.spark.mllib.linalg.{Vectors, Vector}
 object WordVectors {
 	def load(sc: SparkContext, path: URI): RDD[WordVector] = {
 		val tuples = readTuples(sc, path)
+
+    val name = new File(path.getPath()).getName
 		tuples.map { case(index, word, vector) => WordVector(index, word, Vectors.dense(vector)) }
+      .setName(s"$name-wordvectors")
 	}
 
   def readTuples(sc: SparkContext, path: URI): RDD[(Long, String, Array[Double])] = {
+    val name = new File(path.getPath()).getName
+
     val file = sc.textFile(path.toString)
     val tuples = file
       .zipWithIndex()
@@ -23,8 +29,7 @@ object WordVectors {
       .map{case(index,arr) => (index, arr.head, arr.tail)}
       .map{case(index, word, vector) => (index, word, vector.map(_.toDouble))}
 
-
-    tuples
+    tuples.setName(s"$name-tuples")
   }
 
   def computeDimensionStats(vects: RDD[WordVector]): Array[Statistics] = {
@@ -37,6 +42,8 @@ object WordVectors {
       (a, b) => a.zip(b).map { case (stats, value) => stats.merge(value) },
       (a, b) => a.zip(b).map { case (stats1, stats2) => stats1.merge(stats2) }
     )
+
+    vectorAsArray.unpersist()
 
     stats.map { stat => Statistics.fromStatCounter(stat) }
   }
@@ -54,7 +61,7 @@ object WordVectors {
       }
 
       wv.copy(vector = Vectors.dense(newArr))
-    }.cache()
+    }
   }
 
   def vectorsToUnitVectors(vects: RDD[WordVector]): RDD[WordVector] = {
@@ -65,6 +72,6 @@ object WordVectors {
       val newArr = wv.vector.toArray.map { value => value / max }
 
       wv.copy(vector = Vectors.dense(newArr))
-    }.cache()
+    }
   }
 }
