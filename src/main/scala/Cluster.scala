@@ -155,18 +155,20 @@ object Cluster {
 
       val wsse = clusters.computeCost(vectors)
 
+      val bClusters = sc.broadcast(clusters)
+
       //Classify every vector in the set using this model
-      val clusteredWords = vectors.map(v => (clusters.predict(v), v)).cache().setName(s"$variantName-clusteredWords")
+      val clusteredWords = vectors.map(v => (bClusters.value.predict(v), v)).cache().setName(s"$variantName-clusteredWords")
 
       val distanceToCentroid = clusteredWords.map{ case(cluster, vector) =>
-        val centroid = clusters.clusterCenters(cluster)
+        val centroid = bClusters.value.clusterCenters(cluster)
         val distance = math.sqrt(Vectors.sqdist(vector, centroid))
 
         distance
       }.mean()
 
       val cosineDistance = clusteredWords.map{ case(cluster, vector) =>
-        val centroid = clusters.clusterCenters(cluster)
+        val centroid = bClusters.value.clusterCenters(cluster)
 
         val dotProduct = centroid.toArray.zip(vector.toArray).map(pair => pair._1 * pair._2).sum
         val magProduct = Vectors.norm(centroid, 2.0) * Vectors.norm(vector, 2.0)
