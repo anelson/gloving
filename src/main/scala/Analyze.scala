@@ -16,7 +16,14 @@ import org.apache.spark.mllib.linalg.{Vectors, Vector}
 import play.api.libs.json._
 import play.api.libs.json.Json._
 
+import org.slf4j.LoggerFactory
+import com.typesafe.scalalogging.slf4j.Logger
+
+import gloving.WordVectorRDD._
+
 object Analyze {
+  @transient lazy val logger = Logger(LoggerFactory.getLogger(getClass.getName))
+
   case class CliOptions(gloveVectorsUrl: URI = null,
     outputUrl: Option[URI] = None)
 
@@ -40,18 +47,18 @@ object Analyze {
   def analyze(sc: SparkContext, config: CliOptions) {
     val name = new File(config.gloveVectorsUrl.getPath()).getName
 
-    val words = WordVectors.load(sc, config.gloveVectorsUrl).cache()
+    val words = WordVectorRDD.load(sc, config.gloveVectorsUrl).cache()
 
     val analyses: Map[String, VectorAnalysis] = HashMap()
 
-    println("Analyzing vectors")
+    logger.info("Analyzing vectors")
     analyses(name) = analyze(words)
 
-    println("Analyzing standardized vectors")
-    analyses(name + "-std") = analyze(WordVectors.vectorsToStandardScoreVectors(words, WordVectors.computeDimensionStats(words)))
+    logger.info("Analyzing standardized vectors")
+    analyses(name + "-std") = analyze(words.toStandardScoreVectors())
 
-    println("Analyzing normalized vectors")
-    analyses(name + "-norm") = analyze(WordVectors.vectorsToUnitVectors(words))
+    logger.info("Analyzing normalized vectors")
+    analyses(name + "-norm") = analyze(words.toUnitVectors())
 
     implicit val fmt = Json.format[VectorAnalysis]
     val jsonAnalyses = analyses.map{ case(k,v) => (k, Json.toJson(v)) }
@@ -61,7 +68,7 @@ object Analyze {
     val file = new File(s"$name.json")
     new PrintWriter(file) { write(json); close }
 
-    println(s"Wrote analysis to $file")
+    logger.info(s"Wrote analysis to $file")
 
     config.outputUrl.map { url =>
       S3Helper.writeToS3(url.resolve(file.getName), file)
@@ -74,7 +81,7 @@ object Analyze {
 
     VectorAnalysis(words = words.count(),
       dimensionality = words.first().vector.size,
-      dimensionStats = WordVectors.computeDimensionStats(words),
+      dimensionStats = words.computeDimensionStats(),
       pnormStats = Statistics.fromStatCounter(pnorms.stats))
   }
 }

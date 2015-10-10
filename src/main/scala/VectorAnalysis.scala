@@ -36,5 +36,3 @@ case class VectorAnalysis(words: Long,
   dimensionality: Int,
   dimensionStats: Array[Statistics],
   pnormStats: Statistics)
-
-case class KmeansStatistics(k: Int, iterations: Int, runs: Int, wsse: Double, meanDistanceToCentroid: Double, meanCosineDistance: Double)
