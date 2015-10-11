@@ -14,15 +14,9 @@ case class Statistics(max: Double,
   mean: Double,
   stdev: Double,
   variance: Double) {
-
-  override def toString(): String = {
-    Json.stringify(Json.toJson(this)(Statistics.fmt))
-  }
 }
 
 object Statistics {
-  implicit val fmt = Json.format[Statistics]
-
   def fromStatCounter(stats: StatCounter): Statistics = {
     Statistics(stats.max,
       stats.min,
@@ -32,7 +26,16 @@ object Statistics {
   }
 }
 
-case class VectorAnalysis(words: Long,
+case class VectorStatistics(words: Long,
   dimensionality: Int,
   dimensionStats: Array[Statistics],
-  pnormStats: Statistics)
+  normStats: Statistics)
+
+case class VectorAnalysis(unprocessed: VectorStatistics,
+  normalized: VectorStatistics)
+
+object VectorAnalysis {
+  implicit val statisticsFmt = Json.format[Statistics]
+  implicit val vectorStatisticsFmt = Json.format[VectorStatistics]
+  implicit val vectorAnalysisFmt = Json.format[VectorAnalysis]
+}

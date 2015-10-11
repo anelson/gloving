@@ -24,16 +24,16 @@ import gloving.WordVectorRDD._
 object Analyze {
   @transient lazy val logger = Logger(LoggerFactory.getLogger(getClass.getName))
 
-  case class CliOptions(gloveVectorsUrl: URI = null,
-    outputUrl: Option[URI] = None)
+  case class CliOptions(vectorUrls: Seq[URI] = Seq(),
+    outputUrl: URI = new URI("./vector-analysis.json"))
 
   def main(args: Array[String]) {
     val optParser = new scopt.OptionParser[CliOptions]("cluster") {
       head("gloving", "SNAPSHOT")
-      opt[URI]('v', "vectors") required() action { (x, c) =>
-        c.copy(gloveVectorsUrl = x) } text("URL containing GloVe pre-trained word vectors")
-      opt[URI]('o', "outputdir") optional() action { (x, c) =>
-        c.copy(outputUrl = Some(x)) } text("URL at which output is written")
+      arg[URI]("vector file [vector file...]") unbounded() required() action { (x, c) =>
+        c.copy(vectorUrls = c.vectorUrls :+ x) } text("URLs or paths to vector files created by the load command")
+      opt[URI]('o', "output") optional() action { (x, c) =>
+        c.copy(outputUrl = x) } text("Path and file name to which the analysis JSON file is written")
     }
 
     val config = optParser.parse(args, CliOptions()).get
@@ -45,43 +45,44 @@ object Analyze {
   }
 
   def analyze(sc: SparkContext, config: CliOptions) {
-    val name = new File(config.gloveVectorsUrl.getPath()).getName
+    val analyses = config.vectorUrls.map { vectorUrl =>
+      val name = new File(vectorUrl.getPath()).getName
 
-    val words = WordVectorRDD.load(sc, config.gloveVectorsUrl).cache()
+      val words = WordVectorRDD.load(sc, vectorUrl).cache()
 
-    val analyses: Map[String, VectorAnalysis] = HashMap()
+      logger.info(s"Analyzing vectors $name unprocessed")
+      val unprocessedStats = analyze(words)
 
-    logger.info("Analyzing vectors")
-    analyses(name) = analyze(words)
+      logger.info(s"Analyzing vectors $name normalized")
+      val normalizedStats = analyze(words.toUnitVectors())
 
-    logger.info("Analyzing standardized vectors")
-    analyses(name + "-std") = analyze(words.toStandardScoreVectors())
+      val analysis = VectorAnalysis(unprocessed = unprocessedStats, normalized = normalizedStats)
 
-    logger.info("Analyzing normalized vectors")
-    analyses(name + "-norm") = analyze(words.toUnitVectors())
+      words.unpersist()
 
-    implicit val fmt = Json.format[VectorAnalysis]
+      (name, analysis)
+    }
+
+    //analysis is a collection of (name, analysis) tuples.  Convert it into
+    //a JSON map with 'name' as the key
+    import gloving.VectorAnalysis._
+
     val jsonAnalyses = analyses.map{ case(k,v) => (k, Json.toJson(v)) }
     val jsonObj = JsObject(jsonAnalyses.toSeq)
     val json = Json.prettyPrint(jsonObj)
 
-    val file = new File(s"$name.json")
+    val file = new File(config.outputUrl.toString())
     new PrintWriter(file) { write(json); close }
 
     logger.info(s"Wrote analysis to $file")
-
-    config.outputUrl.map { url =>
-      S3Helper.writeToS3(url.resolve(file.getName), file)
-    }
-
   }
 
-  def analyze(words: RDD[WordVector]): VectorAnalysis = {
-    val pnorms = words.map { wv => Vectors.norm(wv.vector, 2.0) }
+  def analyze(words: WordVectorRDD): VectorStatistics = {
+    val norms = words.map { wv => Vectors.norm(wv.vector, 2.0) }
 
-    VectorAnalysis(words = words.count(),
+    VectorStatistics(words = words.count(),
       dimensionality = words.first().vector.size,
       dimensionStats = words.computeDimensionStats(),
-      pnormStats = Statistics.fromStatCounter(pnorms.stats))
+      normStats = Statistics.fromStatCounter(norms.stats))
   }
 }
