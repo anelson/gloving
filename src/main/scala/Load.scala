@@ -2,6 +2,7 @@ package gloving
 
 import java.net.URI
 import java.io.{File, PrintWriter}
+import java.nio.file.Paths
 
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
@@ -11,15 +12,15 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.mllib.linalg.{Vectors, Vector}
 
 object Load {
-  case class CliOptions(inputUrl: URI = null,
+  case class CliOptions(inputUrls: Seq[URI] = Nil,
     outputUrl: URI = null,
     format: String = null)
 
   def main(args: Array[String]) {
     val optParser = new scopt.OptionParser[CliOptions]("gloving-load") {
       head("gloving", "SNAPSHOT")
-      opt[URI]('i', "input") required() action { (x, c) =>
-        c.copy(inputUrl = x) } text("URL or path to input vector file")
+      arg[URI]("input file [input file...]") unbounded() required() action { (x, c) =>
+        c.copy(inputUrls = c.inputUrls :+ x) } text("URLs or paths to input vector file(s)")
       opt[URI]('o', "output") required() action { (x, c) =>
         c.copy(outputUrl = x) } text("URL or path to output file in a format usable by the other downstream processing tasks")
       opt[String]('f', "format") required() action { (x, c) =>
@@ -44,10 +45,20 @@ object Load {
   }
 
   def loadGlove(sc: SparkContext, config: CliOptions) {
-    val loader = new GloVeWordVectorLoader(config.inputUrl)
-    val words = loader.load(sc)
-    words.save(config.outputUrl)
+    config.inputUrls.foreach { inputUrl =>
+      val name = new File(inputUrl.getPath()).getName.replace(".gz", "").replace(".txt", "")
+      val loader = new GloVeWordVectorLoader(inputUrl)
+      val words = loader.load(sc)
+      words.save(Paths.get(config.outputUrl.toString(), name).toUri)
+    }
   }
 
-  def loadWord2Vec(sc: SparkContext, config: CliOptions) = ???
+  def loadWord2Vec(sc: SparkContext, config: CliOptions) {
+    config.inputUrls.foreach { inputUrl =>
+      val name = new File(inputUrl.getPath()).getName.replace(".gz", "").replace(".bin", "")
+      val loader = new Word2VecWordVectorLoader(inputUrl)
+      val words = loader.load(sc)
+      words.save(Paths.get(config.outputUrl.toString(), name).toUri)
+    }
+  }
 }

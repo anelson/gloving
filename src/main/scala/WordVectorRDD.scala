@@ -61,12 +61,12 @@ class WordVectorRDD(val rdd: RDD[WordVector]) {
     rdd.map(_.normalize)
   }
 
-  def save(path: URI) {
+  def save(path: URI, mode: SaveMode = SaveMode.Overwrite) {
     val sqlContext = new SQLContext(rdd.context)
     import sqlContext.implicits._
 
     logger.info(s"Saving ${name} to $path")
-    rdd.toDF().write.mode(SaveMode.Overwrite).format("parquet").save(path.toString())
+    rdd.toDF().write.mode(mode).format("parquet").save(path.toString())
   }
 }
 
