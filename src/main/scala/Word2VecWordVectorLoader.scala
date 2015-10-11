@@ -4,6 +4,7 @@ import java.net.URI
 import java.io.{File, FileInputStream, BufferedInputStream, DataInputStream, InputStream}
 import java.nio.file.Paths
 import java.nio.charset.StandardCharsets
+import java.nio.{ByteBuffer,ByteOrder}
 import java.util.zip.GZIPInputStream
 
 import scala.collection.mutable.ArrayBuffer
@@ -31,6 +32,7 @@ class Word2VecWordVectorLoader(val path: URI) extends WordVectorLoader {
 
   val WordsPerChunk = 100000
   val ReadBufferSize = 1024 * 1024 //Aggressively buffer the input if it's compressed
+  val BytesPerFloat = 4
 
   @transient lazy val logger = Logger(LoggerFactory.getLogger(getClass.getName))
 
@@ -83,13 +85,21 @@ class Word2VecWordVectorLoader(val path: URI) extends WordVectorLoader {
     val numDimensions = readWord(stream).toInt
 
     logger.info(s"Reading $numWords word vectors, $numDimensions dimensions per vector")
+    val readBuffer = ByteBuffer.allocate(numDimensions * BytesPerFloat)
+    readBuffer.order(ByteOrder.LITTLE_ENDIAN)
     for (wordIndex <- (0 until numWords).iterator) yield {
       val word = readWord(stream)
 
       val values = new Array[Double](numDimensions)
 
+      //Read all of the bytes for this vector into the ByteBuffer first, and then and only then
+      //use ByteBuffer to decode the float values.  This is needed because the floats are encoded little-endian
+      //but DataInputStream only handles big-endian encoding
+      readBuffer.rewind()
+      stream.read(readBuffer.array(), readBuffer.arrayOffset(), numDimensions * BytesPerFloat)
+
       for (dim <- 0 until numDimensions) {
-        val value = stream.readFloat()
+        val value = readBuffer.getFloat()
         values(dim) = value.toDouble
       }
 
@@ -116,7 +126,7 @@ class Word2VecWordVectorLoader(val path: URI) extends WordVectorLoader {
   }
 
   private def openVectorFile(path: URI): DataInputStream = {
-    //If the file is gzip-compressed, run it through a GZIPInputStream first
+    //If the file is gzip-compressed, run it through a GZIPInputStfream first
     val rawStream = new FileInputStream(path.toString())
 
     if (path.getPath().endsWith(".gz")) {
