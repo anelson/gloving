@@ -7,6 +7,7 @@ layout: default
 <script src="scripts/box.js"></script>
 <script src="scripts/viz.js"></script>
 
+<!--
 <script>
 var margin = {top: 10, right: 50, bottom: 20, left: 50},
     width = 120 - margin.left - margin.right,
@@ -47,10 +48,6 @@ d3.csv("morley.csv", function(error, csv) {
     .append("g")
       .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
       .call(chart);
-
-  setInterval(function() {
-    svg.datum(randomize).call(chart.duration(1000));
-  }, 2000);
 });
 
 function randomize(d) {
@@ -79,12 +76,15 @@ function iqr(k) {
   };
 }
 </script>
+-->
 
 <div class="home">
 
   <h1 class="page-heading">Exploring pre-trained word vectors</h1>
 
-  <div class="viz"/>
+  <div class="viz">
+    <svg />
+  </div>
 
   <p class="rss-subscribe">subscribe <a href="{{ "/feed.xml" | prepend: site.baseurl }}">via RSS</a></p>
 
