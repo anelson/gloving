@@ -52,17 +52,17 @@ d3.json("vector-analysis.json", (error, json) ->
   min = Infinity
   max = -Infinity
 
-  chart = d3.box()
-    .width(width)
-    .height(height)
-
   #data = [];
   min = _.min(data, (x) -> x.min).min
   max = _.max(data, (x) -> x.max).max
 
-  chart.domain([min, max]);
   scale = d3.scale.linear().domain([min, max]).range([height, 0]).nice(tickCount)
   axis = d3.svg.axis().scale(scale).orient("left").ticks(tickCount)
+
+  chart = d3.box()
+    .width(width)
+    .height(height)
+    .yScale(scale)
 
   svg = d3.select(".viz").select("svg")
       .attr("class", "box")
