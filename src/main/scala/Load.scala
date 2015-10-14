@@ -38,27 +38,39 @@ object Load {
     val conf = new SparkConf().setAppName("gloving-loader")
     val sc = new SparkContext(conf)
 
+    val handler = (name: String, words: WordVectorRDD) => load(name, words, config)
     config.format match {
-      case "glove" => loadGlove(sc, config)
-      case "word2vec" => loadWord2Vec(sc, config)
+      case "glove" => loadGlove(sc, config, handler)
+      case "word2vec" => loadWord2Vec(sc, config, handler)
     }
   }
 
-  def loadGlove(sc: SparkContext, config: CliOptions) {
+  def load(name: String, words: WordVectorRDD, config: CliOptions) {
+    words.cache()
+
+    words.save(Paths.get(config.outputUrl.toString(), name).toUri)
+    words.toUnitVectors().save(Paths.get(config.outputUrl.toString(), s"$name-normalized").toUri)
+
+    words.unpersist()
+  }
+
+  def loadGlove(sc: SparkContext, config: CliOptions, handler: (String, WordVectorRDD) => Unit) {
     config.inputUrls.foreach { inputUrl =>
       val name = new File(inputUrl.getPath()).getName.replace(".gz", "").replace(".txt", "")
       val loader = new GloVeWordVectorLoader(inputUrl)
       val words = loader.load(sc)
-      words.save(Paths.get(config.outputUrl.toString(), name).toUri)
+
+      handler(name, words)
     }
   }
 
-  def loadWord2Vec(sc: SparkContext, config: CliOptions) {
+  def loadWord2Vec(sc: SparkContext, config: CliOptions, handler: (String, WordVectorRDD) => Unit) {
     config.inputUrls.foreach { inputUrl =>
       val name = new File(inputUrl.getPath()).getName.replace(".gz", "").replace(".bin", "")
       val loader = new Word2VecWordVectorLoader(inputUrl)
       val words = loader.load(sc)
-      words.save(Paths.get(config.outputUrl.toString(), name).toUri)
+
+      handler(name, words)
     }
   }
 }
