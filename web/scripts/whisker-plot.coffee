@@ -28,7 +28,7 @@ d3.whiskerPlot = () ->
 
     singleDimTotalWidth = singleDim.width + singleDim.margin.left + singleDim.margin.right
     axisWidth = 23
-    width = singleDimTotalWidth * n + axisWidth
+    width = singleDimTotalWidth * n + 2 * axisWidth
 
     min = _.min(data, (x) -> x.min).min
     max = _.max(data, (x) -> x.max).max
@@ -48,10 +48,16 @@ d3.whiskerPlot = () ->
         .append("g")
           .attr("transform", "translate(#{margin.left}, #{margin.top})")
 
+    # Render the Y axis at both the far left and far right side of the chart
     svg.append("g")
         .attr("class", "y axis")
         .attr("transform", "translate(#{axisWidth}, 0)")
         .call(axis)
+
+    svg.append("g")
+        .attr("class", "y axis")
+        .attr("transform", "translate(#{width - axisWidth}, 0)")
+        .call(axis.orient("right"))
 
     svg.selectAll("g.datapoint")
       .data(data)
@@ -75,12 +81,12 @@ d3.whiskerPlot = () ->
       .enter().append("line")
         .attr(
           class: "horizontalGrid"
-          x1: margin.right
-          x2: width
+          x1: axisWidth   # start the gridlines to the right of the axis that's on the left side
+          x2: width - axisWidth # and end them at the left of the axis that's on the right side
           y1: (d) -> scale(d)
           y2: (d) -> scale(d)
           fill: "none"
-          "shape-rendering": "crispEdges"
+          #"shape-rendering": "crispEdges"
           stroke: "black"
           "stroke-width": "1px"
         )

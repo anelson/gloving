@@ -9,7 +9,7 @@ d3.json("vector-analysis.json", (error, json) ->
 
   margin = {top: 10, right: 10, bottom: 10, left: 10}
 
-  height = 500 - margin.top - margin.bottom
+  height = 600 - margin.top - margin.bottom
   chart = d3.whiskerPlot()
     .margin(margin)
     .height(height)
