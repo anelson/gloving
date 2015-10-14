@@ -1,7 +1,7 @@
 package gloving
 
 import java.net.URI
-import java.io.File
+import java.io.{File, Serializable}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.storage.StorageLevel
@@ -18,7 +18,7 @@ import com.typesafe.scalalogging.slf4j.Logger
 
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics
 
-class WordVectorRDD(val rdd: RDD[WordVector]) {
+class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
   @transient lazy val logger = Logger(LoggerFactory.getLogger(getClass.getName))
 
   def name = rdd.name
