@@ -80,6 +80,9 @@ libraryDependencies += "com.typesafe" %% "scalalogging-slf4j" % "1.1.0"
 //work around absurd AWS SDK issue https://github.com/aws/aws-sdk-java/issues/444
 libraryDependencies += "joda-time" % "joda-time" % "2.8.2"
 
+
+libraryDependencies += "org.apache.commons" % "commons-math3" % "3.5"
+
 // testing
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.4" % "test"
 

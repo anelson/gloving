@@ -45,29 +45,22 @@ object Analyze {
   }
 
   def analyze(sc: SparkContext, config: CliOptions) {
-    val analyses = config.vectorUrls.map { vectorUrl =>
+    val statsMap = config.vectorUrls.map { vectorUrl =>
       val name = new File(vectorUrl.getPath()).getName
 
-      val words = WordVectorRDD.load(sc, vectorUrl).cache()
+      val words = WordVectorRDD.load(sc, vectorUrl)
 
-      logger.info(s"Analyzing vectors $name unprocessed")
-      val unprocessedStats = analyze(words)
+      logger.info(s"Analyzing vectors $name")
+      val stats = words.computeStats()
 
-      logger.info(s"Analyzing vectors $name normalized")
-      val normalizedStats = analyze(words.toUnitVectors())
-
-      val analysis = VectorAnalysis(unprocessed = unprocessedStats, normalized = normalizedStats)
-
-      words.unpersist()
-
-      (name, analysis)
+      (name, stats)
     }
 
     //analysis is a collection of (name, analysis) tuples.  Convert it into
     //a JSON map with 'name' as the key
-    import gloving.VectorAnalysis._
+    import gloving.VectorStatistics._
 
-    val jsonAnalyses = analyses.map{ case(k,v) => (k, Json.toJson(v)) }
+    val jsonAnalyses = statsMap.map{ case(k,v) => (k, Json.toJson(v)) }
     val jsonObj = JsObject(jsonAnalyses.toSeq)
     val json = Json.prettyPrint(jsonObj)
 
@@ -75,14 +68,5 @@ object Analyze {
     new PrintWriter(file) { write(json); close }
 
     logger.info(s"Wrote analysis to $file")
-  }
-
-  def analyze(words: WordVectorRDD): VectorStatistics = {
-    val norms = words.map { wv => Vectors.norm(wv.vector, 2.0) }
-
-    VectorStatistics(words = words.count(),
-      dimensionality = words.first().vector.size,
-      dimensionStats = words.computeDimensionStats(),
-      normStats = Statistics.fromStatCounter(norms.stats))
   }
 }
