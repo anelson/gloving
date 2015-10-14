@@ -4,7 +4,7 @@
 d3.json("vector-analysis.json", (error, json) ->
   throw error if error
 
-  source = json["GoogleNews-vectors-negative300"].unprocessed
+  source = json["GoogleNews-vectors-negative300"]
   data = source.dimensionStats
 
   margin = {top: 10, right: 10, bottom: 10, left: 10}

@@ -59,25 +59,11 @@ d3.whiskerPlot = () ->
         .attr("transform", "translate(#{width - axisWidth}, 0)")
         .call(axis.orient("right"))
 
-    svg.selectAll("g.datapoint")
-      .data(data)
-      .enter().append("g")
-        .attr("class", "datapoint")
-        .attr("transform", (d, i) -> "translate(#{axisWidth + singleDimTotalWidth * i}, 0)")
-        .call((g) ->
-          g.append("title")
-            .text( (d, i) ->
-              "Dimension #{i}:\n
-              - min: #{d.min}\n
-              - max: #{d.max}\n
-              - mean: #{d.mean}\n
-              - stdev: #{d.stdev}"
-            )
-        )
-        .call(singleDimChart)
-
     # Draw grid lines
-    svg.selectAll("line.horizontalGrid").data(scale.ticks(tickCount))
+    svg.insert("g", "g.datapoint")
+      .attr("class", "gridlines")
+      .selectAll("line.horizontalGrid")
+      .data(scale.ticks(tickCount))
       .enter().append("line")
         .attr(
           class: "horizontalGrid"
@@ -90,6 +76,28 @@ d3.whiskerPlot = () ->
           stroke: "black"
           "stroke-width": "1px"
         )
+
+    # Draw the individual boxes and whiskers for each data point
+    svg.selectAll("g.datapoint")
+      .data(data)
+      .enter().insert("g")
+        .attr("class", "datapoint")
+        .attr("transform", (d, i) -> "translate(#{axisWidth + singleDimTotalWidth * i}, 0)")
+        .call((g) ->
+          g.append("title")
+            .text( (d, i) ->
+              "Dimension #{i}:\n
+              - min: #{d.min}\n
+              - max: #{d.max}\n
+              - mean: #{d.mean}\n
+              - stdev: #{d.stdev}\n
+              - median: #{d.median}\n
+              - q1: #{d.q1}\n
+              - q3: #{d.q3}\n
+              - iqr: #{d.q3 - d.q1}"
+            )
+        )
+        .call(singleDimChart)
 
   render.height = (x) ->
     if (!arguments.length)
@@ -160,7 +168,7 @@ d3.box = () ->
 
       # center line: the vertical line spanning the whiskers.
       center = g.selectAll("line.center")
-          .data(if whiskerData then [whiskerData] else [])
+          .data([whiskerData])
 
       center.enter().insert("line", "rect")
           .attr("class", "center")
@@ -169,20 +177,20 @@ d3.box = () ->
           .attr("x2", width / 2)
           .attr("y2",  (d) -> yScale(d[1]) )
 
-      # IQR box (though in this case it's actually std dev box)
+      # IQR box
       box = g.selectAll("rect.box")
           .data([d])
 
       box.enter().append("rect")
           .attr("class", "box")
           .attr("x", 0)
-          .attr("y", (d) -> yScale(d.mean + d.stdev) )
+          .attr("y", (d) -> yScale(d.q3))
           .attr("width", width)
-          .attr("height", (d) -> yScale(d.mean - d.stdev) - yScale(d.mean + d.stdev) )
+          .attr("height", (d) -> yScale(d.q1) - yScale(d.q3))
 
-      # Median line (although in this case it's mean line)
+      # Median line
       medianLine = g.selectAll("line.median")
-          .data([d.mean])
+          .data([d.median])
 
       medianLine.enter().append("line")
           .attr("class", "median")
