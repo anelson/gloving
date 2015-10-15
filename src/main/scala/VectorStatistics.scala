@@ -15,21 +15,48 @@ case class Statistics(max: Double,
   mean: Double,
   stdev: Double,
   variance: Double,
-  median: Double,
-  q1: Double,
-  q3: Double) {
+  percentiles: Map[String, Double],
+  histogram: Array[Int]) {
 }
 
 object Statistics {
-  def fromDescriptiveStatistics(stats: DescriptiveStatistics): Statistics = {
+  def fromDescriptiveStatistics(stats: DescriptiveStatistics, numBins: Int): Statistics = {
+    val percentiles = Map(
+      "2"-> stats.getPercentile(2),
+      "9"-> stats.getPercentile(9),
+      "25" -> stats.getPercentile(25),
+      "50" -> stats.getPercentile(50),
+      "75" -> stats.getPercentile(75),
+      "91" -> stats.getPercentile(91),
+      "98" -> stats.getPercentile(98)
+    )
+
     Statistics(min = stats.getMin(),
       max = stats.getMax(),
       mean = stats.getMean(),
       stdev = stats.getStandardDeviation(),
       variance = stats.getVariance(),
-      median = stats.getPercentile(50),
-      q1 = stats.getPercentile(25),
-      q3 = stats.getPercentile(75))
+      percentiles = percentiles,
+      histogram = computeHistogram(stats, numBins))
+  }
+
+  def computeHistogram(stats: DescriptiveStatistics, numBins: Int): Array[Int] = {
+    val min = stats.getMin()
+    val max = stats.getMax()
+    val result = new Array[Int](numBins)
+    val binSize = (max - min) / numBins
+
+    val values = stats.getValues()
+    val bins = values.map {
+      case x if x == min => 0
+      case x if x == max => numBins - 1
+      case x => ((x - min) / binSize).toInt
+    }
+    val binCounts = bins.groupBy(identity).mapValues(_.size)
+
+    binCounts.foreach { case(bin, count) => result(bin) = count }
+
+    result
   }
 }
 

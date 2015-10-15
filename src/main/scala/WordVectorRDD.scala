@@ -3,6 +3,7 @@ package gloving
 import java.net.URI
 import java.io.{File, Serializable}
 
+import org.apache.spark.Partitioner
 import org.apache.spark.SparkContext
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.sql.SQLContext
@@ -23,64 +24,40 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
 
   def name = rdd.name
 
-  def computeStats(): VectorStatistics = {
+  def computeStats(histogramBins: Int = 20): VectorStatistics = {
     VectorStatistics(words = rdd.count(),
       dimensionality = rdd.first().vector.size,
-      dimensionStats = computeDimensionStats(),
-      normStats = computeNormStatistics)
+      dimensionStats = computeDimensionStats(histogramBins),
+      normStats = computeNormStatistics(histogramBins))
   }
 
-  def computeDimensionStats(): Array[Statistics] = {
+  def computeDimensionStats(histogramBins: Int): Array[Statistics] = {
     val vectorAsArray = rdd.map(_.vector.toArray).setName(s"${name}-asArray").persist(StorageLevel.MEMORY_AND_DISK)
 
     try {
-      val dimensionality = rdd.first().vector.size
-      val n = vectorAsArray.count()
+      val dimensionality = vectorAsArray.first().length
+      val n = vectorAsArray.count.toInt
 
-      //Compute the stats, including median and inter-quartile range (IQR) for each dimension.  This is going to suck.
-      // I can't figure a good way to do this within the confines of an RDD, so ALL values in a given dimension are pulled down to the driver
-      // God have mercy.
-      val stats = for (dim <- 0 until dimensionality) yield {
-        // Get all of the values of this particular dimension, sort them so the smallest value is first, and compute the stats
-        val values = vectorAsArray.map(_(dim)).collect()
-        val desc = new DescriptiveStatistics(values)
+      val stats: Array[(Int, Statistics)] = (0 until dimensionality).grouped(n / 4).toSeq.par.flatMap { dimensions =>
+        for (dim <- dimensions) yield {
+          val values = vectorAsArray.map(_(dim)).collect()
 
-        Statistics.fromDescriptiveStatistics(desc)
-      }
+          val desc = new DescriptiveStatistics(values)
+          (dim, Statistics.fromDescriptiveStatistics(desc, histogramBins))
+        }
+      }.toArray
 
-      stats.toArray
+      stats.sortBy(_._1).map(_._2)
     } finally {
       vectorAsArray.unpersist()
     }
   }
 
-  def computeNormStatistics: Statistics = {
+  def computeNormStatistics(histogramBins: Int): Statistics = {
     //Someday I'll figure how to compute median and IQR within Spark and this won't hurt so bad
     val norms = rdd.map { wv => Vectors.norm(wv.vector, 2.0) }
     val desc = new DescriptiveStatistics(norms.collect())
-    Statistics.fromDescriptiveStatistics(desc)
-  }
-
-  def toStandardScoreVectors(): WordVectorRDD = {
-    toStandardScoreVectors(computeDimensionStats())
-  }
-
-  def toStandardScoreVectors(dimStats: Array[Statistics]): WordVectorRDD = {
-    val bDimStats = rdd.context.broadcast(dimStats)
-
-    try {
-      rdd.map { wv =>
-        val arr = wv.vector.toArray
-
-        val newArr = bDimStats.value.zip(arr).map { case (stat, value) =>
-          (value - stat.mean) / (if (stat.stdev <= 0) (1.0) else ( stat.stdev ))
-        }
-
-        wv.copy(vector = Vectors.dense(newArr))
-      }
-    } finally {
-      bDimStats.unpersist()
-    }
+    Statistics.fromDescriptiveStatistics(desc, histogramBins)
   }
 
   def toUnitVectors(): WordVectorRDD = {
