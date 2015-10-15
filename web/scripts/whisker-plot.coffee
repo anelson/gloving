@@ -96,25 +96,31 @@ d3.whiskerPlot = () ->
         .on("mouseout", hideTooltip)
 
   getTooltipText = (d, i) ->
-    "Dimension #{i}:\n
-      - min: #{d.min}\n
-      - max: #{d.max}\n
-      - mean: #{d.mean}\n
-      - stdev: #{d.stdev}\n
-      - median: #{d.median}\n
-      - q1: #{d.q1}\n
-      - q3: #{d.q3}\n
-      - iqr: #{d.q3 - d.q1}"
+    fmt = d3.format(".5g")
+
+    "min: #{fmt(d.min)}\n"+
+    "max: #{fmt(d.max)}\n"+
+    "mean: #{fmt(d.mean)}\n"+
+    "stdev: #{fmt(d.stdev)}\n"+
+    "median: #{fmt(d.median)}\n"+
+    "q1: #{fmt(d.q1)}\n"+
+    "q3: #{fmt(d.q3)}\n"+
+    "iqr: #{fmt(d.q3 - d.q1)}"
 
   showTooltip = (d, i) ->
     d3.select(this).select("rect.datapointbg").classed("cell-hover", true)
-    d3.select("#tooltip")
+    tooltip = d3.select("#tooltip")
       .style("left", d3.event.pageX+10 + "px")
       .style("top", d3.event.pageY-10 + "px")
-      .select("#value")
-      .text(getTooltipText(d, i))
+
+    renderTooltip(tooltip, d, i)
 
     d3.select("#tooltip").classed("hidden", false)
+
+  renderTooltip = (tooltip, d, i) ->
+    tooltip.html("
+      <div class='tooltip-title'>Dimension: #{i} (0-based)</div>
+      <pre class='tooltip-stats'>#{getTooltipText(d, i)}</pre>")
 
   hideTooltip = (d) ->
     d3.select(this).select("rect.datapointbg").classed("cell-hover", false)
