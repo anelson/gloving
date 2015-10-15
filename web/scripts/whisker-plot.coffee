@@ -48,6 +48,14 @@ d3.whiskerPlot = () ->
         .append("g")
           .attr("transform", "translate(#{margin.left}, #{margin.top})")
 
+    # Create the tooltip
+    parentSelector.append("div")
+      .attr("id", "tooltip")
+      .attr("class", "hidden")
+      .append("p")
+        .append("span")
+          .attr("id", "value")
+
     # Render the Y axis at both the far left and far right side of the chart
     svg.append("g")
         .attr("class", "y axis")
@@ -85,19 +93,34 @@ d3.whiskerPlot = () ->
         .attr("transform", (d, i) -> "translate(#{axisWidth + singleDimTotalWidth * i}, 0)")
         .call((g) ->
           g.append("title")
-            .text( (d, i) ->
-              "Dimension #{i}:\n
-              - min: #{d.min}\n
-              - max: #{d.max}\n
-              - mean: #{d.mean}\n
-              - stdev: #{d.stdev}\n
-              - median: #{d.median}\n
-              - q1: #{d.q1}\n
-              - q3: #{d.q3}\n
-              - iqr: #{d.q3 - d.q1}"
-            )
+            .text(getTooltipText)
         )
         .call(singleDimChart)
+        .on("mouseover", showTooltip)
+        .on("mouseout", hideTooltip)
+
+  getTooltipText = (d, i) ->
+    "Dimension #{i}:\n
+      - min: #{d.min}\n
+      - max: #{d.max}\n
+      - mean: #{d.mean}\n
+      - stdev: #{d.stdev}\n
+      - median: #{d.median}\n
+      - q1: #{d.q1}\n
+      - q3: #{d.q3}\n
+      - iqr: #{d.q3 - d.q1}"
+
+  showTooltip = (d, i) ->
+    d3.select("#tooltip")
+      .style("left", d3.event.pageX+10 + "px")
+      .style("top", d3.event.pageY-10 + "px")
+      .select("#value")
+      .text(getTooltipText(d, i))
+
+    d3.select("#tooltip").classed("hidden", false)
+
+  hideTooltip = (d) ->
+    d3.select("#tooltip").classed("hidden", true)
 
   render.height = (x) ->
     if (!arguments.length)
