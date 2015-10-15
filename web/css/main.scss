@@ -99,3 +99,13 @@ $on-laptop:        800px;
   font-size: 12px;
   line-height: 20px;
 }
+
+rect.datapointbg {
+	fill-opacity: 0%;
+	stroke-width: 0px;
+}
+
+rect.cell-hover {
+  stroke: #f00;
+  stroke-width:0.3px;
+}

@@ -91,10 +91,6 @@ d3.whiskerPlot = () ->
       .enter().insert("g")
         .attr("class", "datapoint")
         .attr("transform", (d, i) -> "translate(#{axisWidth + singleDimTotalWidth * i}, 0)")
-        .call((g) ->
-          g.append("title")
-            .text(getTooltipText)
-        )
         .call(singleDimChart)
         .on("mouseover", showTooltip)
         .on("mouseout", hideTooltip)
@@ -111,6 +107,7 @@ d3.whiskerPlot = () ->
       - iqr: #{d.q3 - d.q1}"
 
   showTooltip = (d, i) ->
+    d3.select(this).select("rect.datapointbg").classed("cell-hover", true)
     d3.select("#tooltip")
       .style("left", d3.event.pageX+10 + "px")
       .style("top", d3.event.pageY-10 + "px")
@@ -120,6 +117,7 @@ d3.whiskerPlot = () ->
     d3.select("#tooltip").classed("hidden", false)
 
   hideTooltip = (d) ->
+    d3.select(this).select("rect.datapointbg").classed("cell-hover", false)
     d3.select("#tooltip").classed("hidden", true)
 
   render.height = (x) ->
@@ -188,6 +186,14 @@ d3.box = () ->
       n = d.length
 
       whiskerData = [d.min, d.max]
+
+      # background rectangle for highlighting and such
+      rect = g.append("rect")
+        .attr("class", "datapointbg")
+        .attr("x", 0)
+        .attr("y", yScale(d.max))
+        .attr("width", width)
+        .attr("height", yScale(d.min) - yScale(d.max))
 
       # center line: the vertical line spanning the whiskers.
       center = g.selectAll("line.center")
