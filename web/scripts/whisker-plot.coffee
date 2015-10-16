@@ -102,10 +102,10 @@ d3.whiskerPlot = () ->
     "max: #{fmt(d.max)}\n"+
     "mean: #{fmt(d.mean)}\n"+
     "stdev: #{fmt(d.stdev)}\n"+
-    "median: #{fmt(d.median)}\n"+
-    "q1: #{fmt(d.q1)}\n"+
-    "q3: #{fmt(d.q3)}\n"+
-    "iqr: #{fmt(d.q3 - d.q1)}"
+    "median: #{fmt(d.percentiles['50'])}\n"+
+    "q1: #{fmt(d.percentiles['25'])}\n"+
+    "q3: #{fmt(d.percentiles['75'])}\n"+
+    "iqr: #{fmt(d.percentiles['75'] - d.percentiles['25'])}"
 
   showTooltip = (d, i) ->
     d3.select(this).select("rect.datapointbg").classed("cell-hover", true)
@@ -121,6 +121,17 @@ d3.whiskerPlot = () ->
     tooltip.html("
       <div class='tooltip-title'>Dimension: #{i} (0-based)</div>
       <pre class='tooltip-stats'>#{getTooltipText(d, i)}</pre>")
+
+    histogram = d3.histogram()
+      .width(200)
+      .height(300)
+
+    data =
+      min: d.min
+      max: d.max
+      bins: d.histogram
+
+    tooltip.call(histogram, data)
 
   hideTooltip = (d) ->
     d3.select(this).select("rect.datapointbg").classed("cell-hover", false)
@@ -219,13 +230,13 @@ d3.box = () ->
       box.enter().append("rect")
           .attr("class", "box")
           .attr("x", 0)
-          .attr("y", (d) -> yScale(d.q3))
+          .attr("y", (d) -> yScale(d.percentiles['75']))
           .attr("width", width)
-          .attr("height", (d) -> yScale(d.q1) - yScale(d.q3))
+          .attr("height", (d) -> yScale(d.percentiles['25']) - yScale(d.percentiles['75']))
 
       # Median line
       medianLine = g.selectAll("line.median")
-          .data([d.median])
+          .data([d.percentiles['50']])
 
       medianLine.enter().append("line")
           .attr("class", "median")
@@ -274,3 +285,81 @@ d3.box = () ->
       box
 
   box
+
+d3.histogram = () ->
+  margin = { top: 0, right: 0, left: 0, bottom: 0 }
+  width = 300
+  height = 200
+
+  render = (parentSelector, data) ->
+    bins = data.bins.length
+    min = data.min
+    max = data.max
+    binSize = (max - min) / bins
+
+    xScale = d3.scale.linear()
+      .domain([0, bins])
+      .range([0, width])
+
+    xAxis = d3.svg.axis()
+      .scale(xScale)
+      .orient("bottom")
+
+    yScale = d3.scale.linear()
+      .domain([0, d3.max(data.bins)])
+      .range([height, 0])
+
+    svg = parentSelector.append("svg")
+        .attr("class", "histogram")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.bottom + margin.top)
+        .append("g")
+          .attr("transform", "translate(#{margin.left}, #{margin.top})")
+
+    bar = svg.selectAll(".bar")
+      .data(data.bins)
+      .enter().append("g")
+        .attr("class", "bar")
+          .attr("transform", (d, i) -> "translate(#{xScale(i)}, 0)")
+
+    bar.append("rect")
+      .attr("x", 1)
+      .attr("y", (d) -> yScale(d) )
+      .attr("width", xScale(1))
+      .attr("height", (d) -> height - yScale(d) )
+
+    bar.append("text")
+      .attr("dy", ".75em")
+      .attr("y", 6)
+      .attr("x", xScale(binSize / 2))
+      .attr("text-anchor", "middle")
+      .text((d) -> d3.format(",.0f")(d) )
+
+    svg.append("g")
+      .attr("class", "x axis")
+        .attr("transform", "translate(0, #{height})")
+        .call(xAxis)
+
+  render.width = (x) ->
+    if (!arguments.length)
+      width
+    else
+      width = x
+    render
+
+  render.height = (x) ->
+    if (!arguments.length)
+      height
+    else
+      height = x
+    render
+
+  render.margin = (x) ->
+    if (!arguments.length)
+      margin
+    else
+      margin = x
+
+    render
+
+  render
