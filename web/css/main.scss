@@ -76,7 +76,7 @@ $on-laptop:        800px;
 
 #tooltip {
   position: absolute;
-  width: 200px;
+  width: 250px;
   height: auto;
   padding: 10px;
   background-color: white;
@@ -100,9 +100,11 @@ $on-laptop:        800px;
   line-height: 20px;
 }
 
-pre.tooltip-stats {
+.tooltip-stats ul{
 	background-color: #eef;
-	font-size: 15px;
+	font-size: 10px;
+  margin: 2px;
+  list-style-type: none;
 }
 
 rect.datapointbg {

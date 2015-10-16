@@ -14,9 +14,6 @@ layout: default
   <div class="viz">
   </div>
 
-  <div class="histo">
-  </div>
-
   <p class="rss-subscribe">subscribe <a href="{{ "/feed.xml" | prepend: site.baseurl }}">via RSS</a></p>
 
 </div>

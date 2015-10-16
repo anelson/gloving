@@ -18,15 +18,4 @@ d3.json("vector-analysis.json", (error, json) ->
     .tickCount(20)
 
   chart(d3.select(".viz"), data)
-
-  histo = d3.histogram()
-    .height(500)
-    .width(600)
-
-  histData =
-    min: data[0].min
-    max: data[0].max
-    bins: data[0].histogram
-
-  histo(d3.select(".histo"), histData)
 )
