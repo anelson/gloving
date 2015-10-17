@@ -63,20 +63,22 @@ window.loadVectorAnalysisData = (callback) ->
     callback(vectorAnalysis)
   )
 
-window.drawGoogleWord2VecChart = (vectorAnalysis) ->
-  source = vectorAnalysis["GoogleNews-vectors-negative300"]
+window.drawDimensionsWhiskerPlot = (vectorAnalysis, name) ->
+  source = vectorAnalysis[name]
+  idName = name.replace(/\./g, "_")
 
-  boxPlotChart = createBoxPlot(".viz", filterDataRange(source, allValuesRange))
+  boxPlotChart = createBoxPlot("##{idName}_viz", filterDataRange(source, allValuesRange))
 
-  d3.select("#includePercentage").on("change", () ->
+  d3.select("##{idName}_includePercentage").on("change", () ->
     filter = switch this.value
       when "100" then allValuesRange
       when "96" then ninetysixPercentRange
       when "iqr15" then iqr1point5Range
       else allValuesRange
 
-    updateBoxPlot(boxPlotChart, ".viz", filterDataRange(source, filter))
+    updateBoxPlot(boxPlotChart, "##{idName}_viz", filterDataRange(source, filter))
   )
+
 
 source = null
 boxPlotChart = null

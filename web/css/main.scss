@@ -51,11 +51,30 @@ $on-laptop:        800px;
         "syntax-highlighting"
 ;
 
+table {
+  border-collapse: collapse;
+}
+
+table, th, td {
+  border: 1px solid black;
+}
+
+th, td {
+  vertical-align: top;
+  padding: 5px;
+}
+
+td.nowrap {
+  white-space: nowrap;
+}
+
 
 //Styles for d3 visualizations
 .viz {
-  overflow: visible;
+  border: 2px solid gray;
+  overflow: auto;
 }
+
 .box {
   font: 10px sans-serif;
 }
