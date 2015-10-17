@@ -29,8 +29,9 @@ d3.whiskerPlot = () ->
     singleDimTotalWidth = computeSingleDimTotalWidth()
     width = computeWidth(data)
 
-    min = _.min(data, (x) -> x.min).min
-    max = _.max(data, (x) -> x.max).max
+    # Determine the global min and max, across all dimensions
+    min = _.min(_.map(data, (x) -> x.range[0]))
+    max = _.max(_.map(data, (x) -> x.range[1]))
 
     scale = d3.scale.linear().domain([min, max]).range([height, 0]).nice(tickCount)
     axis = d3.svg.axis().scale(scale).ticks(tickCount)
@@ -241,7 +242,7 @@ d3.box = () ->
       g = d3.select(this)
       n = d.length
 
-      whiskerData = [d.min, d.max]
+      whiskerData = d.range
 
       # background rectangle for highlighting and such
       bg = g.selectAll("rect.datapointbg")
@@ -250,14 +251,14 @@ d3.box = () ->
       bg.enter().append("rect")
         .attr("class", "datapointbg")
         .attr("x", 0)
-        .attr("y", yScale(d.max))
+        .attr("y", yScale(d.range[1]))
         .attr("width", width)
-        .attr("height", yScale(d.min) - yScale(d.max))
+        .attr("height", yScale(d.range[0]) - yScale(d.range[1]))
 
       bg.transition()
         .duration(duration)
-        .attr("y", yScale(d.max))
-        .attr("height", yScale(d.min) - yScale(d.max))
+        .attr("y", yScale(d.range[1]))
+        .attr("height", yScale(d.range[0]) - yScale(d.range[1]))
 
       # center line: the vertical line spanning the whiskers.
       center = g.selectAll("line.center")

@@ -33,10 +33,7 @@ updateBoxPlot = (chart, parentSelector, data) ->
 filterDataRange = (data, rangeFunc) ->
   dprime = _.cloneDeep(data)
   dprime.dimensionStats = _.map(dprime.dimensionStats, (d) ->
-    [min, max] = rangeFunc(d)
-
-    d.min = min
-    d.max = max
+    d.range = rangeFunc(d)
 
     d
   )
