@@ -8,9 +8,11 @@
 #  - mean
 #  - stdev
 d3.whiskerPlot = () ->
-  margin = { top: 0, right: 0, left: 0, bottom: 0 }
+  axisWidth = 23
   height = 500
   tickCount = 20
+  duration = 1000
+  tooltipSelector = "#tooltip"
 
   # Size and margins for each individual box and whisker, one of which corresponds
   # to each dimension of the data
@@ -23,33 +25,36 @@ d3.whiskerPlot = () ->
 
   singleDim.width = 8 - singleDim.margin.left - singleDim.margin.right
 
-  render = (parentSelector, data) ->
-    n = data.length
-
-    singleDimTotalWidth = singleDim.width + singleDim.margin.left + singleDim.margin.right
-    axisWidth = 23
-    width = singleDimTotalWidth * n + 2 * axisWidth
+  render = (svg, data) ->
+    singleDimTotalWidth = computeSingleDimTotalWidth()
+    width = computeWidth(data)
 
     min = _.min(data, (x) -> x.min).min
     max = _.max(data, (x) -> x.max).max
 
     scale = d3.scale.linear().domain([min, max]).range([height, 0]).nice(tickCount)
-    axis = d3.svg.axis().scale(scale).orient("left").ticks(tickCount)
+    axis = d3.svg.axis().scale(scale).ticks(tickCount)
 
     singleDimChart = d3.box()
       .width(singleDim.width)
       .height(height - singleDim.margin.top - singleDim.margin.bottom)
       .yScale(scale)
+      .duration(duration)
 
-    svg = parentSelector.append("svg")
-        .attr("class", "box")
-        .attr("width", width + margin.left + margin.right)
-        .attr("height", height + margin.bottom + margin.top)
-        .append("g")
-          .attr("transform", "translate(#{margin.left}, #{margin.top})")
+    # Create the initial elements of the graph that will not change between renderings
+    # TODO: This data([0]) thing seems like a hack but I can't find another way to do this and yet still
+    # be able to call render multiple times with different values and transition between them
+    #
+    # From https://groups.google.com/forum/#!topic/d3-js/Rlv0O8xsFhs this seems to be idiomatic, according to
+    # Mike Bostock himself
+    enter = svg.selectAll("*") # Note using '*' here obviously assumes that the selector 'svg' has no elements when the chart is first created
+      .data([null])
+      .enter()
 
     # Create the tooltip
-    parentSelector.append("div")
+    d3.selectAll(tooltipSelector)
+      .data([null])
+      .enter().append("div")
       .attr("id", "tooltip")
       .attr("class", "hidden")
       .append("p")
@@ -57,43 +62,71 @@ d3.whiskerPlot = () ->
           .attr("id", "value")
 
     # Render the Y axis at both the far left and far right side of the chart
-    svg.append("g")
-        .attr("class", "y axis")
+    enter.append("g")
+        .attr("class", "yaxis left")
         .attr("transform", "translate(#{axisWidth}, 0)")
-        .call(axis)
+        .call(axis.orient("left"))
 
-    svg.append("g")
-        .attr("class", "y axis")
+    enter.append("g")
+        .attr("class", "yaxis right")
         .attr("transform", "translate(#{width - axisWidth}, 0)")
         .call(axis.orient("right"))
 
-    # Draw grid lines
-    svg.insert("g", "g.datapoint")
+    # Update the axes with a transition
+    svg.select("g.yaxis.left")
+      .transition()
+      .duration(duration)
+      .call(axis.orient("left"))
+
+    svg.select("g.yaxis.right")
+      .transition()
+      .duration(duration)
+      .call(axis.orient("right"))
+
+    # Create the group that will hold the grid lines
+    enter.insert("g", "g.datapoint")
       .attr("class", "gridlines")
+
+    # Draw grid lines
+    gridlines = svg.select("g.gridlines")
       .selectAll("line.horizontalGrid")
       .data(scale.ticks(tickCount))
-      .enter().append("line")
-        .attr(
-          class: "horizontalGrid"
-          x1: axisWidth   # start the gridlines to the right of the axis that's on the left side
-          x2: width - axisWidth # and end them at the left of the axis that's on the right side
-          y1: (d) -> scale(d)
-          y2: (d) -> scale(d)
-          fill: "none"
-          #"shape-rendering": "crispEdges"
-          stroke: "black"
-          "stroke-width": "1px"
-        )
+
+    gridlines
+        .enter().append("line")
+          .attr(
+            class: "horizontalGrid"
+            x1: axisWidth   # start the gridlines to the right of the axis that's on the left side
+            x2: width - axisWidth # and end them at the left of the axis that's on the right side
+            y1: (d) -> scale(d)
+            y2: (d) -> scale(d)
+            fill: "none"
+            #"shape-rendering": "crispEdges"
+            stroke: "black"
+            "stroke-width": "1px"
+          )
+
+    gridlines.transition()
+      .duration(duration)
+      .attr("y1", (d) -> scale(d))
+      .attr("y2", (d) -> scale(d))
+
+    gridlines.exit().remove()
 
     # Draw the individual boxes and whiskers for each data point
-    svg.selectAll("g.datapoint")
+    datapoints = svg.selectAll("g.datapoint")
       .data(data)
-      .enter().insert("g")
+
+    datapoints.enter().insert("g")
         .attr("class", "datapoint")
         .attr("transform", (d, i) -> "translate(#{axisWidth + singleDimTotalWidth * i}, 0)")
         .call(singleDimChart)
         .on("mouseover", showTooltip)
         .on("mouseout", hideTooltip)
+
+    datapoints.transition()
+      .duration(duration)
+      .call(singleDimChart)
 
   getTooltipText = (d, i) ->
     fmt = d3.format(".5g")
@@ -103,9 +136,9 @@ d3.whiskerPlot = () ->
       <li>mean: #{fmt(d.mean)}</li>
       <li>stdev: #{fmt(d.stdev)}</li>
       <li>median: #{fmt(d.percentiles['50'])}</li>
-      <li>75% of values are between [#{fmt(d.percentiles['25'])} and #{fmt(d.percentiles['75'])}]</li>
-      <li>95% of values are between [#{fmt(d.percentiles['9'])} and #{fmt(d.percentiles['91'])}]</li>
-      <li>98% of values are between [#{fmt(d.percentiles['2'])} and #{fmt(d.percentiles['98'])}]</li>
+      <li>50% of values are between [#{fmt(d.percentiles['25'])} and #{fmt(d.percentiles['75'])}]</li>
+      <li>82% of values are between [#{fmt(d.percentiles['9'])} and #{fmt(d.percentiles['91'])}]</li>
+      <li>96% of values are between [#{fmt(d.percentiles['2'])} and #{fmt(d.percentiles['98'])}]</li>
       <li>100% of values are between [#{fmt(d.min)} and #{fmt(d.max)}]</li>
     </ul>"
 
@@ -128,6 +161,10 @@ d3.whiskerPlot = () ->
     d3.select(this).select("rect.datapointbg").classed("cell-hover", false)
     d3.select("#tooltip").classed("hidden", true)
 
+  computeWidth = (data) -> computeSingleDimTotalWidth() * data.length + 2 * axisWidth
+
+  computeSingleDimTotalWidth = () -> singleDim.width + singleDim.margin.left + singleDim.margin.right
+
   render.height = (x) ->
     if (!arguments.length)
       height
@@ -135,11 +172,18 @@ d3.whiskerPlot = () ->
       height = x
       render
 
-  render.margin = (x) ->
+  render.duration = (x) ->
     if (!arguments.length)
-      margin
+      duration
     else
-      margin = x
+      duration = x
+      render
+
+  render.tooltipSelector = (x) ->
+    if (!arguments.length)
+      tooltipSelector
+    else
+      tooltipSelector = x
       render
 
   render.tickCount = (x) ->
@@ -170,6 +214,9 @@ d3.whiskerPlot = () ->
       singleDim.width = x
       render
 
+  render.computeWidth = computeWidth
+
+
   render
 
 
@@ -179,6 +226,7 @@ d3.box = () ->
   height = 1
   yScale = null
   value = Number
+  duration = 1000
 
   # Renders one box whiskers plot for a single data element, where g is a selector describing the
   # parent
@@ -196,22 +244,35 @@ d3.box = () ->
       whiskerData = [d.min, d.max]
 
       # background rectangle for highlighting and such
-      rect = g.append("rect")
+      bg = g.selectAll("rect.datapointbg")
+        .data([null])
+
+      bg.enter().append("rect")
         .attr("class", "datapointbg")
         .attr("x", 0)
         .attr("y", yScale(d.max))
         .attr("width", width)
         .attr("height", yScale(d.min) - yScale(d.max))
 
+      bg.transition()
+        .duration(duration)
+        .attr("y", yScale(d.max))
+        .attr("height", yScale(d.min) - yScale(d.max))
+
       # center line: the vertical line spanning the whiskers.
       center = g.selectAll("line.center")
-          .data([whiskerData])
+          .data([ whiskerData ])
 
       center.enter().insert("line", "rect")
           .attr("class", "center")
           .attr("x1", width / 2)
           .attr("y1", (d) -> yScale(d[0]) )
           .attr("x2", width / 2)
+          .attr("y2",  (d) -> yScale(d[1]) )
+
+      center.transition()
+        .duration(duration)
+          .attr("y1", (d) -> yScale(d[0]) )
           .attr("y2",  (d) -> yScale(d[1]) )
 
       # IQR box
@@ -225,6 +286,11 @@ d3.box = () ->
           .attr("width", width)
           .attr("height", (d) -> yScale(d.percentiles['25']) - yScale(d.percentiles['75']))
 
+      box.transition()
+        .duration(duration)
+        .attr("y", (d) -> yScale(d.percentiles['75']))
+        .attr("height", (d) -> yScale(d.percentiles['25']) - yScale(d.percentiles['75']))
+
       # Median line
       medianLine = g.selectAll("line.median")
           .data([d.percentiles['50']])
@@ -236,9 +302,14 @@ d3.box = () ->
           .attr("x2", width)
           .attr("y2", yScale)
 
+      medianLine.transition()
+        .duration(duration)
+          .attr("y1", yScale)
+          .attr("y2", yScale)
+
       # Whiskers
       whisker = g.selectAll("line.whisker")
-          .data(whiskerData || [])
+          .data(whiskerData)
 
       whisker.enter().insert("line", "circle, text")
           .attr("class", "whisker")
@@ -246,6 +317,12 @@ d3.box = () ->
           .attr("y1", yScale)
           .attr("x2", width)
           .attr("y2", yScale)
+
+      whisker.transition()
+        .duration(duration)
+        .attr("y1", yScale)
+        .attr("y2", yScale)
+
 
   box.width = (x) ->
     if (!arguments.length)
@@ -266,6 +343,13 @@ d3.box = () ->
       yScale
     else
       yScale = x
+      box
+
+  box.duration = (x) ->
+    if (!arguments.length)
+      duration
+    else
+      duration = x
       box
 
   box.value = (x) ->

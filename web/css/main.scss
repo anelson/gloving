@@ -53,6 +53,9 @@ $on-laptop:        800px;
 
 
 //Styles for d3 visualizations
+.viz {
+  overflow: scroll;
+}
 .box {
   font: 10px sans-serif;
 }
