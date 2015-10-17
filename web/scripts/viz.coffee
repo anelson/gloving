@@ -57,14 +57,17 @@ iqr1point5Range = (data) ->
 
   [median - iqr, median + iqr]
 
+window.loadVectorAnalysisData = (callback) ->
+  d3.json("vector-analysis.json", (error, json) ->
+    throw error if error
 
-source = null
-boxPlotChart = null
+    vectorAnalysis = json
 
-d3.json("vector-analysis.json", (error, json) ->
-  throw error if error
+    callback(vectorAnalysis)
+  )
 
-  source = json["GoogleNews-vectors-negative300"]
+window.drawGoogleWord2VecChart = (vectorAnalysis) ->
+  source = vectorAnalysis["GoogleNews-vectors-negative300"]
 
   boxPlotChart = createBoxPlot(".viz", filterDataRange(source, allValuesRange))
 
@@ -77,4 +80,9 @@ d3.json("vector-analysis.json", (error, json) ->
 
     updateBoxPlot(boxPlotChart, ".viz", filterDataRange(source, filter))
   )
-)
+
+source = null
+boxPlotChart = null
+vectorAnalysis = null
+
+
