@@ -13,6 +13,7 @@ d3.whiskerPlot = () ->
   tickCount = 20
   duration = 1000
   tooltipSelector = "#tooltip"
+  labels = (d, i) -> "Dimension: #{i} (0-based)"
 
   # Size and margins for each individual box and whisker, one of which corresponds
   # to each dimension of the data
@@ -101,10 +102,6 @@ d3.whiskerPlot = () ->
             x2: width - axisWidth # and end them at the left of the axis that's on the right side
             y1: (d) -> scale(d)
             y2: (d) -> scale(d)
-            fill: "none"
-            #"shape-rendering": "crispEdges"
-            stroke: "black"
-            "stroke-width": "1px"
           )
 
     gridlines.transition()
@@ -155,7 +152,7 @@ d3.whiskerPlot = () ->
 
   renderTooltip = (tooltip, d, i) ->
     tooltip.html("
-      <div class='tooltip-title'>Dimension: #{i} (0-based)</div>
+      <div class='tooltip-title'>#{labels(d, i)}</div>
       <div class='tooltip-stats'>#{getTooltipText(d, i)}</div>")
 
   hideTooltip = (d) ->
@@ -192,6 +189,13 @@ d3.whiskerPlot = () ->
       tickCount
     else
       tickCount = x
+      render
+
+  render.labels = (x) ->
+    if (!arguments.length)
+      labels
+    else
+      labels = x
       render
 
   render.singleDim = (x) ->

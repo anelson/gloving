@@ -6,6 +6,7 @@ title: A few notes about word vectors
 <!--<script src="http://underscorejs.org/underscore-min.js"></script>-->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/3.10.1/lodash.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.6/d3.min.js" charset="utf-8"></script>
+<script src='https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML'></script>
 <script src="scripts/whisker-plot.js"></script>
 <script src="scripts/viz.js"></script>
 
@@ -94,7 +95,7 @@ To start with, I wanted to understand what these models produced.  Let's start b
 
 ### glove.6B.50d
 
-{% include model_histogram.html id="glove.6B.50d" %}
+{% include model_boxplot.html id="glove.6B.50d" %}
 
 This is a dense chart, so take a moment to study it.  In all of these models, the vast majority of the values fall within a very narrow range, more or less +/- 1.0, however there are outliers that drive the range of possible values much higher.  Because of that I've modified the visualization so you can select to view the distributions of 100% of the values, the 96% of the values closest to the median, or the values within the range +/- 1.5 times the IQR (interquartile-range).
 
@@ -104,21 +105,37 @@ For completeness, you can see the same charts for the other models below.  Becau
 
 ### glove.6B.300d
 
-{% include model_histogram.html id="glove.6B.300d" %}
+{% include model_boxplot.html id="glove.6B.300d" %}
 
 Those 300 dimensions make this chart really wide, so you'll have to scroll to see all of them.  For the most part it's a smooth distribution consistent across all the dimensions, but there are some exceptions.  Dimension 9 and 34 and 244 and especially 276 have median values substantially above zero, while 150 and 200 are quite a bit below zero.  Whether or not this presents a problem in the results, we'll find out later.
 
 ### glove.42B.300d
 
-{% include model_histogram.html id="glove.42B.300d" %}
+{% include model_boxplot.html id="glove.42B.300d" %}
 
 Here again we see a few dimensions stepping out of line with an interquartile range entirely above or below zero, though to my eye it seems more smooth and consistent than `glove.6B.300d` did.  That doesn't surprise me, since this model was trained with about 7x more data than `glove.6B.300d`.
 
 ### GoogleNews-vectors-negative300
 
-{% include model_histogram.html id="GoogleNews-vectors-negative300" %}
+{% include model_boxplot.html id="GoogleNews-vectors-negative300" %}
 
 Look at how tight those interquartile-ranges are!  This is the only word2vec model I have, so I don't know if this distribution is characteristic of word2vec in general or if the Google News training corpus is responsible.  In any case, I like it.  96% of values are in the range (-0.45, 0.45).  Of course, a clean distribution doesn't automatically mean word2vec is superior; further testing is needed.
+
+## Magnitude of Vectors
+
+Given a 2 dimensional Cartesian plane, a line from the origin at `(0,0)` to `(5,3)` is how long?  We learned as children to apply the Pythagorean theorem to such problems, ie $$c = \sqrt{a^2 + b^2}$$.  That equation is specific to a two-dimensional coordinate, but it can be generalized to an arbitrary number of dimensions.  Let's say a vector with $$d$$ dimensions is represented as $$\mathbf{v}^d$$, where the value for the 1st dimension is $$\mathbf{v}_0$$, for the 2nd dimension is $$\mathbf{v}_1$$, etc.  The distance of that vector from the origin is called the magnitude of the vector, is written mathematically as $$\| \mathbf{v} \|$$, can be computed the same way we compute the 2D distance with Pythagoras' theorem:
+
+$$ \| \mathbf{v}^d \| = \sqrt{ \sum_{i=0}^d \mathbf{v}_i^2 } $$
+
+When a vector has more than three dimensions it's not possible for us to reason about it in terms of physical space, since we can only interact in three dimensional space, however the math is unaffected by this limitation.  I've computed the magnitude of every vector in every model, and then computed the statistical summary of these magnitudes.  Study the chart below and notice how each model differs:
+
+{% include model_boxplot.html id="magnitudes" %}
+
+Notice how wide the variation in magnitudes is.  All of the models have at least one vector whose magnitude is so close to zero, less than 0.05, that we can't even see it on this chart, and the biggest vector is in the teens, over 21 in the case of the word2vec model!  I think this will be a problem when measuring the distance between two vectors using the Pythagorean approach (called the Euclidean distance), because wide variations in magnitude mean there will be some vectors who are so much longer than the others that they will always be far away from any other vector, even if they have some sort of semantic relationship that should be preserved.
+
+That brings me to the next section, about how to measure the distance between vectors.
+
+
 
 <div id="tooltip" class="hidden">
 </div>
@@ -126,12 +143,16 @@ Look at how tight those interquartile-ranges are!  This is the only word2vec mod
 <script langauge="javascript">
 var vectorAnalysisData = null
 
+var models = [ {% for model in site.data.models %}"{{model.name}}"{%if forloop.last != tru %},{%endif%}{%endfor%} ]
+
 loadVectorAnalysisData( function(data) {
     vectorAnalysisData = data;
 
-    {% for model in site.data.models %}
-      drawDimensionsWhiskerPlot(data, "{{model.name}}");
-    {% endfor %}
+    for (var idx = 0; idx < models.length; idx++) {
+      drawDimensionsWhiskerPlot(data, models[idx]);
+    }
+
+    drawMagnitudesWhiskerPlot(data, models);
   });
 </script>
 

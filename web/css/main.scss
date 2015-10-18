@@ -96,6 +96,12 @@ td.nowrap {
   stroke: #ccc;
 }
 
+line.horizontalGrid {
+  stroke: darkgray;
+  stroke-width: 1px;
+  fill: none;
+}
+
 #tooltip {
   position: absolute;
   width: 250px;
