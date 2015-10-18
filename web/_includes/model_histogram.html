@@ -1,0 +1,10 @@
+<div class="chart">
+  Visualize:
+  <select id="{{ include.id | replace:'.','_' }}_includePercentage">
+    <option value="100" selected="true">100% of data</option>
+    <option value="96">96% of data, excluding outliers at each end</option>
+    <option value="iqr15">+/- 1.5xIQR</option>
+  </select>
+
+  <div id="{{ include.id | replace:'.','_' }}_viz" class="viz"></div>
+</div>

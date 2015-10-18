@@ -1,0 +1,30 @@
+[
+	{
+		"name": "glove.6B.50d",
+		"arch": "GloVe",
+		"words": "400K",
+		"dimensions": 50,
+		"corpus": "Trained on Wikipedia 2014 dump plus Gigawords (approx 6B words)"
+	},
+	{
+		"name": "glove.6B.300d",
+		"arch": "GloVe",
+		"words": "400K",
+		"dimensions": 300,
+		"corpus": "Trained on Wikipedia 2014 dump plus Gigawords (approx 6B words)"
+	},
+	{
+		"name": "glove.42B.300d",
+		"arch": "GloVe",
+		"words": "~1.9 mil",
+		"dimensions": 300,
+		"corpus": "Trained on Common Crawl (approx 42B words)"
+	},
+	{
+		"name": "GoogleNews-vectors-negative300",
+		"arch": "word2vec",
+		"words": "3 mil",
+		"dimensions": 300,
+		"corpus": "Trained on the Google News dataset, approx 100 billion words"
+	}
+]
