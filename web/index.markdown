@@ -124,14 +124,14 @@ Look at how tight those interquartile-ranges are!  This is the only word2vec mod
 </div>
 
 <script langauge="javascript">
-models = ["glove.6B.50d", "glove.6B.300d", "glove.42B.300d", "GoogleNews-vectors-negative300"]
-
 var vectorAnalysisData = null
 
 loadVectorAnalysisData( function(data) {
     vectorAnalysisData = data;
 
-    _.each(models, function(model) { drawDimensionsWhiskerPlot(data, model); });
+    {% for model in site.data.models %}
+      drawDimensionsWhiskerPlot(data, "{{model.name}}");
+    {% endfor %}
   });
 </script>
 
