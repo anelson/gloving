@@ -132,8 +132,8 @@ object Evaluate {
 
       //Compute the aggregate statistics for all of the problems
       val testCount = detailedResult.length
-      val euclideanCorrect = detailedResult.map { result => result.problem.test.target == result.euclideanAnswer.word }.length
-      val cosineCorrect = detailedResult.map { result => result.problem.test.target == result.cosineAnswer.word }.length
+      val euclideanCorrect = detailedResult.filter(result => result.problem.test.target == result.euclideanAnswer.word).length
+      val cosineCorrect = detailedResult.filter(result => result.problem.test.target == result.cosineAnswer.word).length
 
       AnalogyResults(name,
         testCount,

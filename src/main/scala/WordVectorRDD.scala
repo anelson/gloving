@@ -88,22 +88,18 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
       val distance = distanceFunction(wv.vector)
 
       (wv, distance)
-    }.cache()
-
-    try {
-      //Randomly sample n results; the worst score of the random sample gives us a lower bound on the results, below which
-      //we can exclude the rest.  Do the exclusion before the sort, due to the expense of sorting
-      implicit val ordering = scala.math.Ordering.Double
-
-      val samples = distances.takeSample(false, n)
-      val minScore = samples.map(_._2).min(ordering)
-
-      val sorted = distances.filter(_._2 >= minScore).sortBy(_._2, lowerIsBetter)
-
-      sorted.take(n)
-    } finally {
-      distances.unpersist()
     }
+
+    //Create an ordering for the results that we can pass to top.  Top is looking for the 'largets' n elements,
+    //so if lowerIsBetter is true, that means we need an ordering that places lower values as 'greater than' higher values,
+    //and vice versa is lowerIsBetter is false.  That's why the ordering below seems like it's exactly the opposite of what you
+    //would want if you were sorting the results and taking the first n
+    val ordering: Ordering[(WordVector, Double)] = Ordering.by(
+      if (lowerIsBetter) { (r) => -r._2 }
+      else { (r) => r._2 }
+    )
+
+    distances.top(n)(ordering)
   }
 
   def findNearestEuclidean(vector: Vector, n: Int): Array[(WordVector, Double)] = findNearest(n, WordVectorRDD.euclideanDistance(vector), true)
