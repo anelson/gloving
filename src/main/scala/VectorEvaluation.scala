@@ -46,22 +46,22 @@ case class AnalogyResult(problem: AnalogyProblem,
   euclideanAnswer: WordDistance,
   cosineAnswer: WordDistance)
 
+case class AlgorithmAnalogyPerformance(accuracy: Double,
+  atats: Statistics,
+  correctStats: Statistics,
+  incorrectStats: Statistics)
+
 case class AnalogyResults(testFile: String,
   testCount: Int,
-  euclideanAccuracy: Double,
-  euclideanStats: Statistics,
-  euclideanCorrectStats: Statistics,
-  euclideanIncorrectStats: Statistics,
-  cosineAccuracy: Double,
-  cosineStats: Statistics,
-  cosineCorrectStats: Statistics,
-  cosineIncorrectStats: Statistics,
+  euclideanPerformance: AlgorithmAnalogyPerformance,
+  codinePerformance: AlgorithmAnalogyPerformance,
   incorrectResults: Seq[AnalogyResult])
 
 case class VectorEvaluation(analogyResults: Seq[AnalogyResults])
 
 object VectorEvaluation {
   implicit val statsFmt = Json.format[gloving.Statistics]
+  implicit val performanceFmt = Json.format[gloving.AlgorithmAnalogyPerformance]
   implicit val analogyFmt = Json.format[Analogy]
   implicit val problemFmt = Json.format[AnalogyProblem]
   implicit val distanceFmt = Json.format[WordDistance]

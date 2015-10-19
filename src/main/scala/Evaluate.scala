@@ -106,24 +106,24 @@ object Evaluate {
   def computeAnalogyResults(results: Seq[AnalogyResult], name: String): AnalogyResults = {
     //Compute the aggregate statistics for all of the problems
     val euclideanResults = results.map(r => (r.problem.test.target, r.euclideanAnswer))
-    val (euclideanAccuracy, euclideanStats, euclideanCorrectStats, euclideanIncorrectStats) = computeResultStats(euclideanResults)
+    val euclideanPerformance = computeAlgorithmPerformance(euclideanResults)
 
     val cosineResults = results.map(r => (r.problem.test.target, r.cosineAnswer))
-    val (cosineAccuracy, cosineStats, cosineCorrectStats, cosineIncorrectStats) = computeResultStats(cosineResults)
+    val cosinePerformance = computeAlgorithmPerformance(cosineResults)
 
     val incorrectResults = results
       .filter(result => result.problem.test.target != result.euclideanAnswer.word || result.problem.test.target != result.cosineAnswer.word)
 
     AnalogyResults(name,
       results.length,
-      euclideanAccuracy, euclideanStats, euclideanCorrectStats, euclideanIncorrectStats,
-      cosineAccuracy, cosineStats, cosineCorrectStats, cosineIncorrectStats,
+      euclideanPerformance,
+      cosinePerformance,
       incorrectResults.seq)
   }
 
   /** Given a list of expected answers, actual answers, and distances, computes the accuracy, and statistical distribuion
   of the distances overall, correct, and incorrect */
-  def computeResultStats(results: Seq[(String, WordDistance)]): (Double, Statistics, Statistics, Statistics) = {
+  def computeAlgorithmPerformance(results: Seq[(String, WordDistance)]): AlgorithmAnalogyPerformance = {
     val correctResults = results.filter(r => r._1 == r._2.word)
     val incorrectResults = results.filter(r => r._1 != r._2.word)
 
@@ -138,7 +138,7 @@ object Evaluate {
     val correctStats = Statistics.fromDescriptiveStatistics(new DescriptiveStatistics(correctDistances.toArray))
     val incorrectStats = Statistics.fromDescriptiveStatistics(new DescriptiveStatistics(incorrectDistances.toArray))
 
-    (accuracy, stats, correctStats, incorrectStats)
+    AlgorithmAnalogyPerformance(accuracy, stats, correctStats, incorrectStats)
   }
 
   def solveAnalogyProblems(words: WordVectorRDD, wordVectors: Map[String, WordVector], problems: Seq[AnalogyProblem]): Seq[AnalogyResult] = {
