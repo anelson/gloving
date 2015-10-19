@@ -134,12 +134,14 @@ object Evaluate {
       val testCount = detailedResult.length
       val euclideanCorrect = detailedResult.filter(result => result.problem.test.target == result.euclideanAnswer.word).length
       val cosineCorrect = detailedResult.filter(result => result.problem.test.target == result.cosineAnswer.word).length
+      val incorrectResults = detailedResult
+        .filter(result => result.problem.test.target != result.euclideanAnswer.word || result.problem.test.target != result.cosineAnswer.word)
 
       AnalogyResults(name,
         testCount,
         euclideanCorrect.toDouble / testCount.toDouble,
         cosineCorrect.toDouble / testCount.toDouble,
-        detailedResult.seq)
+        incorrectResults.seq)
     }
 
     VectorEvaluation(results.toSeq)

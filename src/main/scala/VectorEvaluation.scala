@@ -50,7 +50,7 @@ case class AnalogyResults(testFile: String,
   testCount: Int,
   euclideanAccuracy: Double,
   cosineAccuracy: Double,
-  detailedResults: Seq[AnalogyResult])
+  incorrectResults: Seq[AnalogyResult])
 
 case class VectorEvaluation(analogyResults: Seq[AnalogyResults])
 
