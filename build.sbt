@@ -82,6 +82,7 @@ libraryDependencies += "joda-time" % "joda-time" % "2.8.2"
 
 
 libraryDependencies += "org.apache.commons" % "commons-math3" % "3.5"
+libraryDependencies += "net.sf.ehcache" % "ehcache" % "2.10.0"
 
 // testing
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.4" % "test"

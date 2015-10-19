@@ -64,6 +64,54 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
     rdd.map(_.normalize)
   }
 
+  def findWord(word: String):  Option[WordVector] = {
+    rdd.filter(_.word == word).take(1).headOption
+  }
+
+  /* In Scala, as in life, vectorization is critical to good performance.  Word lookups are expensive, so
+  its better to do them all at once.  This vectorized version of findWord looks up a bunch of words, and returns a
+  map mapping the words to the corresponding WordVector.  If one of the words isn't found, it simply doesn't appear in
+  the map */
+  def findWords(words: Set[String]): Map[String, WordVector] = {
+    val bWords = rdd.context.broadcast(words)
+
+    val wordMap = rdd.filter(wv => bWords.value.contains(wv.word)).map( wv => (wv.word, wv)).collect().toMap
+
+    bWords.unpersist
+
+    wordMap
+  }
+
+  def findNearest(n: Int, distanceFunction: (Vector) => Double, lowerIsBetter: Boolean): Array[(WordVector, Double)] = {
+    //Compute the distance between this vector and all the word vectors
+    val distances: RDD[(WordVector, Double)] = rdd.map { wv =>
+      val distance = distanceFunction(wv.vector)
+
+      (wv, distance)
+    }.cache()
+
+    try {
+      //Randomly sample n results; the worst score of the random sample gives us a lower bound on the results, below which
+      //we can exclude the rest.  Do the exclusion before the sort, due to the expense of sorting
+      implicit val ordering = scala.math.Ordering.Double
+
+      val samples = distances.takeSample(false, n)
+      val minScore = samples.map(_._2).min(ordering)
+
+      val sorted = distances.filter(_._2 >= minScore).sortBy(_._2, lowerIsBetter)
+
+      sorted.take(n)
+    } finally {
+      distances.unpersist()
+    }
+  }
+
+  def findNearestEuclidean(vector: Vector, n: Int): Array[(WordVector, Double)] = findNearest(n, WordVectorRDD.euclideanDistance(vector), true)
+
+  def findNearestCosine(vector: Vector, n: Int): Array[(WordVector, Double)] = {
+    findNearest(n, WordVectorRDD.cosineSimilarity(vector), false)
+  }
+
   def save(path: URI, mode: SaveMode = SaveMode.Overwrite) {
     val sqlContext = new SQLContext(rdd.context)
     import sqlContext.implicits._
@@ -74,11 +122,21 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
 }
 
 object WordVectorRDD {
+  import VectorImplicits._
+
   implicit def RDD2WordVectorRDD(value: RDD[WordVector]): WordVectorRDD = {
     new WordVectorRDD(value)
   }
 
   implicit def WordVectorRDD2RDD(value: WordVectorRDD): RDD[WordVector] = value.rdd
+
+  def euclideanDistance(v1: Vector): Vector => Double = (v2: Vector) => Math.sqrt(Vectors.sqdist(v1, v2))
+
+  def cosineSimilarity(v1: Vector): Vector => Double = {
+    val norm = Vectors.norm(v1, 2.0)
+
+    (v2: Vector) => ( v1 dot v2) / (norm * Vectors.norm(v2, 2.0))
+  }
 
 	def load(sc: SparkContext, path: URI): WordVectorRDD = {
     val name = new File(path.getPath()).getName
