@@ -20,7 +20,7 @@ case class Statistics(max: Double,
 }
 
 object Statistics {
-  def fromDescriptiveStatistics(stats: DescriptiveStatistics, numBins: Int): Statistics = {
+  def fromDescriptiveStatistics(stats: DescriptiveStatistics, numBins: Int = 10): Statistics = {
     val percentiles = Map(
       "2"-> stats.getPercentile(2),
       "9"-> stats.getPercentile(9),
