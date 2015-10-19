@@ -131,11 +131,38 @@ When a vector has more than three dimensions it's not possible for us to reason 
 
 {% include model_boxplot.html id="magnitudes" %}
 
-Notice how wide the variation in magnitudes is.  All of the models have at least one vector whose magnitude is so close to zero, less than 0.05, that we can't even see it on this chart, and the biggest vector is in the teens, over 21 in the case of the word2vec model!  I think this will be a problem when measuring the distance between two vectors using the Pythagorean approach (called the Euclidean distance), because wide variations in magnitude mean there will be some vectors who are so much longer than the others that they will always be far away from any other vector, even if they have some sort of semantic relationship that should be preserved.
+Notice how wide the variation in magnitudes is.  All of the models have at least one vector whose magnitude is so close to zero, less than 0.05, that we can't even see it on this chart, and the biggest vector is in the teens, over 21 in the case of the word2vec model!  I think this will be a problem when measuring the distance between two vectors using the Pythagorean approach (called the Euclidean distance), because wide variations in magnitude mean there will be some vectors which are so much longer than the others that they will always be far away from any other vector, even if they have some sort of semantic relationship that should be preserved.
 
 That brings me to the next section, about how to measure the distance between vectors.
 
+# Measuring Distance Between Word Vectors
 
+In the introduction I gave the example of computing some arithmetic operations on vectors, like `c = athens - greece + norway`, and made the claim that the resulting vector `c` will be closest to the vector for `oslo`.  But what does it mean 'closest'?
+
+The most obvious meaning is the Euclidean distance.  This just requires applying the Pythagorean theorem to the difference between the two vectors.  So if $$ a = (1, 2, 3, 4) $$  and $$ b = (1, 5, 9, 8) $$, then the difference $$ a - b = (1 - 1, 2 - 5, 3 - 9, 4 - 8) = (0, -3, -6, -4) $$.  We know how to apply the Pythagorean theorem to compute the magnitude of that vector:
+
+$$ \| a - b \| = \sqrt{ 0^2 + -3^2 + -6^2 + -4^2 } \approx 7.81 $$
+
+So we can say that the distance between $$a$$ and $$b$$ is about $$ 7.81 $$.  If we had a bunch of vectors, and computed the distance from $$a$$ to all of them, if the one with the lowest distance was $$b$$, we'd say $$b$$ is closest to $$a$$.  Easy.
+
+But remember in the previous section we noticed that the magnitudes of the word vectors in all of the models is widely variable.  This presents a problem for us, because it means that the distance between some words will be much higher than the distance to other words, and I am worried that this will impact the ability to capture the relationships between words.  I don't know this yet, so I'll compute Euclidean distance and see how it works, but there are other ways.
+
+Both the word2vec and GloVe implementations do not bother with Euclidean distance when computing "closest" vectors.  Instead they use a metric called "[cosine similarity](https://en.wikipedia.org/wiki/Cosine_similarity)".  It's not a distance at all, it's the cosine of the angle between the two vectors.  It's hard to visualize the idea of an angle when the vectors have 50 or more dimensions, but again, the math doesn't change.  The cosine of the angle 0 degrees is 1.0, for any other angle it's less than that.  So if two vectors are along the same line, regardless of how much their magnitudes differ, their cosine similarity is 1.0, a perfect match.  Similarly, if two vectors are very close together but pointing in opposite directions, their cosine similarity is 0 or even less.
+
+Cosine similarity is used in text mining often, so it's a proven technique.  It's computed easily enough, as the dot product of two vectors divided by the product of their magnitudes.  More formally:
+
+$$ \cos( \theta ) = \frac { \mathbf{A} \cdot \mathbf{B} } { \| \mathbf{A} \| \|\mathbf{B} \| } $$
+
+With Euclidean distance the lowest value means the closest match, while with cosine similarity the highest value means the closest match.
+
+Which of these metrics is better?  To find out, I'm going to use the question data from the GloVe source tarball.  In the `eval/question-data` folder there are a number of text files, each with four words per line.  Each line is a solved analogy problem "A is to B as C is to D".  Here are some examples:
+
+    athens greece baghdad iraq
+    baghdad iraq bangkok thailand
+    brother sister king queen
+    bad worst simple simplest
+
+For each of these lines, I will compute the analogy problem $$ d = b - a + c $$ where the answer is the word vector closest to $$d$$, where 'closest' will be defined by either Euclidean distance or cosine similarity.
 
 <div id="tooltip" class="hidden">
 </div>
