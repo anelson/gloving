@@ -65,7 +65,8 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
   }
 
   def findWord(word: String):  Option[WordVector] = {
-    rdd.filter(_.word == word).take(1).headOption
+    //rdd.filter(_.word == word).take(1).headOption
+    rdd.filter(_.word.equalsIgnoreCase(word)).take(1).headOption
   }
 
   /* In Scala, as in life, vectorization is critical to good performance.  Word lookups are expensive, so
@@ -78,6 +79,12 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
     val wordMap = rdd.filter(wv => bWords.value.contains(wv.word)).map( wv => (wv.word, wv)).collect().toMap
 
     bWords.unpersist
+
+    words.foreach { word =>
+      if (!wordMap.contains(word)) {
+        logger.error(s"WTF!  Could not find word '$word' in ${rdd.name}")
+      }
+    }
 
     wordMap
   }
@@ -119,11 +126,12 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
     )
 
     //Compute the distances between this vector and all the word vectors
+    //Note that as an optimization we do not include the actual vector of the WordVectors here.  We dont' need it and it wastes memory
     val distances: RDD[(WordVector, Array[Double])] = rdd.map { wv =>
       val distances = distanceFunctions.map(_(wv.vector))
 
-      (wv, distances)
-    }.setName(s"${rdd.name}-top${n}-distances")
+      (wv.copy(vector = null), distances)
+    }.setName(s"${rdd.name}-top${n}-${distanceFunctions.length}distances")
 
     //Within each partition, find the top n matches for each of the distance functions.
     //The key is to avoid traversing the 'distances' RDD more than once
@@ -153,7 +161,7 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
           topMatches(columnIndex)(rowIndex)
         }
       }.toIterator
-    }.setName(s"${rdd.name}-top${n}-topCandidates")
+    }.setName(s"${rdd.name}-top${n}-${distanceFunctions.length}topCandidates")
 
     //The topCandidates RDD will contain n rows for every partition in the rdd.  In amongst all those rows will be the n best matches
     //for each distance function.  Fortunately, n*partitionCount is very likely to be a small number, no more than a thousand or two at the very most,
