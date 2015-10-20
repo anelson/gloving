@@ -170,8 +170,8 @@ object Evaluate {
 
     //Run the queries.  For models with hundreds of dimensions and millions of words, this can be very memory intensive.
     //Chunk the operations such that the product of the number of dimensions and the number of words being queried is no more than
-    //50,000.  There's no magic to that number it just seems reasonable and works on my laptop.
-    val wordsPerChunk = 50000 / words.first.vector.size
+    //20,000.  There's no magic to that number it just seems reasonable and works on my laptop.
+    val wordsPerChunk = 20000 / words.first.vector.size
     val euclideanResults = euclideanDistanceFunctions.grouped(wordsPerChunk).flatMap{ chunk =>
       words.findNearestMulti(1,
         chunk,

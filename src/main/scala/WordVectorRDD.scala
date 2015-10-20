@@ -105,6 +105,8 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
   /** Finds the nearest n words for multiple distance functions in parallel.  This may be more efficient than querying one at a time
   if you have a lot of these nearest queries to perform */
   def findNearestMulti(n: Int, distanceFunctions: Array[(Vector) => Double], lowerIsBetter: Boolean): Array[Array[(WordVector, Double)]] = {
+    require(n > 0)
+
     import gloving.Top._
 
     //Create an ordering for the results that we can pass to top.  Top is looking for the 'largets' n elements,
@@ -125,20 +127,24 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
 
     //Within each partition, find the top n matches for each of the distance functions.
     //The key is to avoid traversing the 'distances' RDD more than once
-    val topCandidates: RDD[Array[(WordVector, Double)]] = distances.mapPartitions { r =>
-      //We can't do this with just one pass through the rows, we need to pull them into an array
-      val rows = r.toArray
-
+    val topCandidates: RDD[Array[(WordVector, Double)]] = distances.mapPartitions { rows =>
       //Right now 'rows' is an Iterator of tuples.  Each tuple is a WordVector in the RDD, and
       //an array of distances, one for each distance function.  The task is to find the top n WordVectors for each
       //distance function.
+      //
+      //Complicating matters is that 'rows' is an Iterator, meaning we can make only one pass over the data.
+      //Normally a quick toArray clears this up, but rows can have tens of thousands up to millions of rows in it,
+      //and we can't assume it fits in memory.  Thus, contort ourselves in order to perform the top n calculation on each
+      //of the distances individually, with only one pass through the iterator
+
+      //Right now, the type yielded by rows is (WordVector, Array[Double]).  We need it to be an Array of (WordVector, Double) tuples,
+      //so we can do a top n computation on each column separately.
+      val rowsArray: Iterator[Array[(WordVector, Double)]] = rows.map(row => row._2.map(score => (row._1, score)))
+
+      val topMatches: Array[Array[(WordVector, Double)]] = rowsArray.multiTop(n, distanceFunctions.length).map(_.toArray)
 
       //Don't make any assumptions about the partitioning scheme.  The partition could have less than n elements
-      val numMatches: Int = if (n > rows.length) { rows.length } else { n }
-
-      val topMatches: Array[Array[(WordVector, Double)]] = distanceFunctions.zipWithIndex.map { case (_, index) =>
-        rows.map(row => (row._1, row._2(index))).top(numMatches).toArray
-      }
+      val numMatches: Int = if (n > topMatches.head.length) { topMatches.head.length} else { n }
 
       //topMatches has one element per distanceFunction, each element is a list of top matches for that distance function.
       //Transpose that to an array with one element for each of the top n matches, each element is an array of matches, one per distance function
