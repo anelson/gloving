@@ -47,14 +47,14 @@ case class AnalogyResult(problem: AnalogyProblem,
   cosineAnswer: WordDistance)
 
 case class AlgorithmAnalogyPerformance(accuracy: Double,
-  atats: Statistics,
+  stats: Statistics,
   correctStats: Statistics,
   incorrectStats: Statistics)
 
 case class AnalogyResults(testFile: String,
   testCount: Int,
   euclideanPerformance: AlgorithmAnalogyPerformance,
-  codinePerformance: AlgorithmAnalogyPerformance,
+  cosinePerformance: AlgorithmAnalogyPerformance,
   incorrectResults: Seq[AnalogyResult])
 
 case class VectorEvaluation(analogyResults: Seq[AnalogyResults])

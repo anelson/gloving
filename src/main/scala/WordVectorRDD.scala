@@ -102,6 +102,63 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
     distances.top(n)(ordering)
   }
 
+  /** Finds the nearest n words for multiple distance functions in parallel.  This may be more efficient than querying one at a time
+  if you have a lot of these nearest queries to perform */
+  def findNearestMulti(n: Int, distanceFunctions: Array[(Vector) => Double], lowerIsBetter: Boolean): Array[Array[(WordVector, Double)]] = {
+    import gloving.Top._
+
+    //Create an ordering for the results that we can pass to top.  Top is looking for the 'largets' n elements,
+    //so if lowerIsBetter is true, that means we need an ordering that places lower values as 'greater than' higher values,
+    //and vice versa is lowerIsBetter is false.  That's why the ordering below seems like it's exactly the opposite of what you
+    //would want if you were sorting the results and taking the first n
+    implicit val ordering: Ordering[(WordVector, Double)] = Ordering.by(
+      if (lowerIsBetter) { (r) => -r._2 }
+      else { (r) => r._2 }
+    )
+
+    //Compute the distances between this vector and all the word vectors
+    val distances: RDD[(WordVector, Array[Double])] = rdd.map { wv =>
+      val distances = distanceFunctions.map(_(wv.vector))
+
+      (wv, distances)
+    }.setName(s"${rdd.name}-top${n}-distances")
+
+    //Within each partition, find the top n matches for each of the distance functions.
+    //The key is to avoid traversing the 'distances' RDD more than once
+    val topCandidates: RDD[Array[(WordVector, Double)]] = distances.mapPartitions { r =>
+      //We can't do this with just one pass through the rows, we need to pull them into an array
+      val rows = r.toArray
+
+      //Right now 'rows' is an Iterator of tuples.  Each tuple is a WordVector in the RDD, and
+      //an array of distances, one for each distance function.  The task is to find the top n WordVectors for each
+      //distance function.
+
+      //Don't make any assumptions about the partitioning scheme.  The partition could have less than n elements
+      val numMatches: Int = if (n > rows.length) { rows.length } else { n }
+
+      val topMatches: Array[Array[(WordVector, Double)]] = distanceFunctions.zipWithIndex.map { case (_, index) =>
+        rows.map(row => (row._1, row._2(index))).top(numMatches).toArray
+      }
+
+      //topMatches has one element per distanceFunction, each element is a list of top matches for that distance function.
+      //Transpose that to an array with one element for each of the top n matches, each element is an array of matches, one per distance function
+      Array.tabulate[Array[(WordVector, Double)]](numMatches) { rowIndex =>
+        distanceFunctions.zipWithIndex.map { case (_, columnIndex) =>
+          topMatches(columnIndex)(rowIndex)
+        }
+      }.toIterator
+    }.setName(s"${rdd.name}-top${n}-topCandidates")
+
+    //The topCandidates RDD will contain n rows for every partition in the rdd.  In amongst all those rows will be the n best matches
+    //for each distance function.  Fortunately, n*partitionCount is very likely to be a small number, no more than a thousand or two at the very most,
+    //so the easy thing to do is to collect it down to the driver program and process the data there
+    val rows: Array[Array[(WordVector, Double)]] = topCandidates.collect()
+
+    distanceFunctions.zipWithIndex.map { case (_, columnIndex) =>
+      rows.map(row => row(columnIndex)).top(n).toArray
+    }
+  }
+
   def findNearestEuclidean(vector: Vector, n: Int): Array[(WordVector, Double)] = findNearest(n, WordVectorRDD.euclideanDistance(vector), true)
 
   def findNearestCosine(vector: Vector, n: Int): Array[(WordVector, Double)] = {

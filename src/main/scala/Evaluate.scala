@@ -135,20 +135,71 @@ object Evaluate {
     val incorrectDistances = incorrectResults.map(_._2.distance)
 
     val stats = Statistics.fromDescriptiveStatistics(new DescriptiveStatistics(allDistances.toArray))
-    val correctStats = Statistics.fromDescriptiveStatistics(new DescriptiveStatistics(correctDistances.toArray))
-    val incorrectStats = Statistics.fromDescriptiveStatistics(new DescriptiveStatistics(incorrectDistances.toArray))
+
+    //If accuracy was 0 %, there are no correct stats, and if it's 100%, there are no incorrect stats
+    val correctStats = accuracy match {
+      case x if x > 0.0 => Statistics.fromDescriptiveStatistics(new DescriptiveStatistics(correctDistances.toArray))
+      case _ => Statistics.empty
+    }
+
+    val incorrectStats = accuracy match {
+      case x if x < 1.0 => Statistics.fromDescriptiveStatistics(new DescriptiveStatistics(incorrectDistances.toArray))
+      case _ => Statistics.empty
+    }
 
     AlgorithmAnalogyPerformance(accuracy, stats, correctStats, incorrectStats)
   }
 
   def solveAnalogyProblems(words: WordVectorRDD, wordVectors: Map[String, WordVector], problems: Seq[AnalogyProblem]): Seq[AnalogyResult] = {
-    problems.par.flatMap { problem => solveAnalogyProblem(words, wordVectors, problem) }.seq
+    //Make an array of all of the AnalogyProblem items, and the vector whose nearest neighbor is expected to be the answer to that problem
+    val problemsWithVector: Array[(AnalogyProblem, Vector)] = problems.map(x => (x, computeQueryVector(wordVectors, x)))
+      .flatMap { case (problem, vector) =>
+        vector match {
+          case None => {
+            logger.error(s"Unable to find word vectors for one or more words in analogy problem $problem")
+            None
+          }
+
+          case Some(v) => Some(problem, v)
+        }
+      }.toArray
+
+    //Make an array of distance functions, one for each problem
+    val euclideanDistanceFunctions: Array[Vector => Double] = problemsWithVector.map { case (_, vector) => WordVectorRDD.euclideanDistance(vector) }
+    val cosineDistanceFunctions: Array[Vector => Double] = problemsWithVector.map { case (_, vector) => WordVectorRDD.cosineSimilarity(vector) }
+
+    //Run the queries.  For models with hundreds of dimensions and millions of words, this can be very memory intensive.
+    //Chunk the operations such that the product of the number of dimensions and the number of words being queried is no more than
+    //50,000.  There's no magic to that number it just seems reasonable and works on my laptop.
+    val wordsPerChunk = 50000 / words.first.vector.size
+    val euclideanResults = euclideanDistanceFunctions.grouped(wordsPerChunk).flatMap{ chunk =>
+      words.findNearestMulti(1,
+        chunk,
+        true)
+    }.toArray
+
+    val cosineResults = cosineDistanceFunctions.grouped(wordsPerChunk).flatMap{ chunk =>
+      words.findNearestMulti(1,
+        chunk,
+        false)
+    }.toArray
+
+    //Combine the results and build the AnalogyResult objects
+    problems.zip(euclideanResults.zip(cosineResults)).map { case (problem, (euclideanResult, cosineResult)) =>
+      AnalogyResult(problem,
+        WordDistance(euclideanResult.head._1.word, euclideanResult.head._2),
+        WordDistance(cosineResult.head._1.word, cosineResult.head._2))
+    }
   }
 
-  def solveAnalogyProblem(words: WordVectorRDD, wordVectors: Map[String, WordVector], problem: AnalogyProblem) : Option[AnalogyResult] = {
+  /* when we do an analogy problem like 'king' - 'man' + 'woman', the vector computed by that vector arithmetic
+  is the query vector.  Computing it requires looking up the vectors for the three words which define the analogy problem
+  any one of those words might not appear in the word vectors model, in which case there can be no query vector, which is why
+  this returns Option */
+  def computeQueryVector(wordVectors: Map[String, WordVector], problem: AnalogyProblem): Option[Vector] = {
     import gloving.VectorImplicits._
 
-    val analogyResult = for (exampleSrc <- wordVectors.get(problem.example.source);
+    for (exampleSrc <- wordVectors.get(problem.example.source);
       exampleTarget <- wordVectors.get(problem.example.target);
       testSrc <- wordVectors.get(problem.test.source)) yield {
       //Find the vector difference between the source and target example words
@@ -157,27 +208,7 @@ object Evaluate {
       //Add the source component of the test analogy, and look for the word most closely matching
       val query = diff.vector + testSrc.vector
 
-      val euclideanResult = words.findNearestEuclidean(query, 1).head
-      val cosineResult = words.findNearestCosine(query, 1).head
-
-      AnalogyResult(problem,
-        WordDistance(euclideanResult._1.word, euclideanResult._2),
-        WordDistance(cosineResult._1.word, cosineResult._2))
-    }
-
-    //Because we used for comprehensions on the Option values returned by findword,
-    //analogyResult could be None if one or more words were not found in the WordVector RDD.
-    //Print a warning in the log; the flatMap call on problems.par will exclude any None values from the results
-    analogyResult match {
-      case None => {
-        logger.error(s"Unable to find word vectors for one or more words in analogy problem $problem")
-        None
-      }
-
-      case x => {
-        logger.info(s"Got analogy result: $x")
-        x
-      }
+      query
     }
   }
 
