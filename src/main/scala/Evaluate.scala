@@ -47,7 +47,7 @@ object Evaluate {
     val config = optParser.parse(args, CliOptions()).get
 
     val conf = new SparkConf().setAppName("gloving-evaluate")
-    val sc = new SparkContext(conf)
+    val sc = new SparkContext(SparkHelpers.config(conf))
 
     evaluate(sc, config)
   }
