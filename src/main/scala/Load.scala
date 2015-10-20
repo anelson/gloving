@@ -1,7 +1,7 @@
 package gloving
 
 import java.net.URI
-import java.io.{File, PrintWriter}
+import java.io.{File, PrintWriter, FileWriter}
 import java.nio.file.Paths
 
 import org.apache.spark.SparkContext
@@ -11,8 +11,14 @@ import org.apache.spark.rdd.RDD
 
 import org.apache.spark.mllib.linalg.{Vectors, Vector}
 
+import org.slf4j.LoggerFactory
+import com.typesafe.scalalogging.slf4j.Logger
+
 object Load {
+  @transient lazy val logger = Logger(LoggerFactory.getLogger(getClass.getName))
+
   case class CliOptions(inputUrls: Seq[URI] = Nil,
+    dump: Boolean = false,
     outputUrl: URI = null,
     format: String = null)
 
@@ -25,6 +31,8 @@ object Load {
         c.copy(outputUrl = x) } text("URL or path to output file in a format usable by the other downstream processing tasks")
       opt[String]('f', "format") required() action { (x, c) =>
         c.copy(format = x) } text("The format of the input.  must be either 'glove' or 'word2vec'")
+      opt[Unit]('d', "dump") optional() action { (x, c) =>
+        c.copy(dump = true) } text("Enables diagnostic dumping.  Each word loaded will be dumped to a text file for further investigation")
       checkConfig { c =>
         c.format match {
           case "glove" | "word2vec" => success
@@ -50,6 +58,21 @@ object Load {
 
     words.save(Paths.get(config.outputUrl.toString(), name).toUri)
     words.toUnitVectors().save(Paths.get(config.outputUrl.toString(), s"$name-normalized").toUri)
+
+    if (config.dump) {
+      val dumpFile = new File(s"$name-dump.txt")
+
+      logger.info(s"Dumping $name to ${dumpFile}")
+
+      val delim = ","
+      words.foreachPartition { part =>
+        val writer = new FileWriter(dumpFile.getAbsoluteFile(), true)
+        part.foreach { wv => writer.write(s"${wv.index}\t${wv.word}\t${wv.vector.toArray.mkString(delim)}\n") }
+        writer.close()
+      }
+
+      logger.info(s"Dumped ${words.count} words to $dumpFile")
+    }
 
     words.unpersist()
   }
