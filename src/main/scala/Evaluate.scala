@@ -168,28 +168,29 @@ object Evaluate {
     val euclideanDistanceFunctions: Array[Vector => Double] = problemsWithVector.map { case (_, vector) => WordVectorRDD.euclideanDistance(vector) }
     val cosineDistanceFunctions: Array[Vector => Double] = problemsWithVector.map { case (_, vector) => WordVectorRDD.cosineSimilarity(vector) }
 
-    //Run the queries.  For models with hundreds of dimensions and millions of words, this can be very memory intensive.
-    //Chunk the operations such that the product of the number of dimensions and the number of words being queried is no more than
-    //20,000.  There's no magic to that number it just seems reasonable and works on my laptop.
-    val wordsPerChunk = 20000 / words.first.vector.size
-    val euclideanResults = euclideanDistanceFunctions.grouped(wordsPerChunk).flatMap{ chunk =>
-      words.findNearestMulti(1,
-        chunk,
+    //Run the queries.
+    val euclideanResults = words.findNearestMulti(1,
+        euclideanDistanceFunctions,
         true)
-    }.toArray
 
-    val cosineResults = cosineDistanceFunctions.grouped(wordsPerChunk).flatMap{ chunk =>
-      words.findNearestMulti(1,
-        chunk,
+    val cosineResults = words.findNearestMulti(1,
+        cosineDistanceFunctions,
         false)
-    }.toArray
 
     //Combine the results and build the AnalogyResult objects
-    problems.zip(euclideanResults.zip(cosineResults)).map { case (problem, (euclideanResult, cosineResult)) =>
+    val completedResults = problems.zip(euclideanResults.zip(cosineResults)).map { case (problem, (euclideanResult, cosineResult)) =>
       AnalogyResult(problem,
         WordDistance(euclideanResult.head._1.word, euclideanResult.head._2),
         WordDistance(cosineResult.head._1.word, cosineResult.head._2))
     }
+
+    val incompletedResults = problems.filter(p => !problemsWithVector.exists(pv => pv._1 == p)).map { problem =>
+      AnalogyResult(problem,
+        WordDistance("", 0.0),
+        WordDistance("", 0.0))
+    }
+
+    completedResults ++ incompletedResults
   }
 
   /* when we do an analogy problem like 'king' - 'man' + 'woman', the vector computed by that vector arithmetic
