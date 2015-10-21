@@ -86,6 +86,8 @@ libraryDependencies += "org.apache.commons" % "commons-math3" % "3.5"
 libraryDependencies += "org.scalanlp" %% "breeze" % "0.11.2"
 libraryDependencies += "org.scalanlp" %% "breeze-natives" % "0.11.2"
 
+libraryDependencies += "org.scalautils" %% "scalautils" % "2.1.5"
+
 // testing
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.4" % "test"
 

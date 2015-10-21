@@ -1,5 +1,11 @@
 package gloving
 
+import scala.language.implicitConversions
+
+import org.scalautils._
+import org.scalautils.TripleEquals._
+import org.scalautils.Tolerance._
+
 import breeze.linalg.{ DenseVector => BDenseVector }
 import org.apache.spark.mllib.linalg.{ DenseVector => SDenseVector }
 
@@ -34,6 +40,19 @@ object VectorImplicits {
 
 		def dot(that: PimpedVector): Double = {
 			vector dot that.vector
+		}
+
+		def computeNorm(): Double = {
+			breeze.linalg.norm(vector)
+		}
+
+		def normalize(): BDenseVector[Double] = {
+			breeze.linalg.normalize(vector)
+		}
+
+		def isNormalized: Boolean = {
+			//Due to rounding errors a normalized vector will usually not be exactly 1.0 norm, but it should be close
+			computeNorm() === 1.0 +- 1E-10
 		}
 
 		def elementsizeOp(that: PimpedVector, op: (Double, Double) => Double): BDenseVector[Double] = {

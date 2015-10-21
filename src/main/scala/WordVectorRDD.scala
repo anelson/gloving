@@ -1,5 +1,7 @@
 package gloving
 
+import scala.language.implicitConversions
+
 import java.net.URI
 import java.io.{File, Serializable}
 
@@ -242,6 +244,14 @@ object WordVectorRDD {
     val norm = breeze.linalg.norm(v1, 2)
 
     (v2: DenseVector[Double]) => (v1 dot v2) / (norm * breeze.linalg.norm(v2, 2))
+  }
+
+  /** If we know all vectors in the model are normalized, we can avoid computing the norms and thus
+  cosine similarity reduces to dot product */
+  def normalizedCosineSimilarity(v1: DenseVector[Double]): DenseVector[Double] => Double = {
+    require(v1.isNormalized)
+
+    (v2: DenseVector[Double]) => v1 dot v2
   }
 
 	def load(sc: SparkContext, path: URI): WordVectorRDD = {

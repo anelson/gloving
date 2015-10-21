@@ -11,7 +11,7 @@ import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 
-import breeze.linalg.DenseVector
+import breeze.linalg.{ DenseVector }
 
 import play.api.libs.json._
 import play.api.libs.json.Json._
@@ -22,12 +22,14 @@ import com.typesafe.scalalogging.slf4j.Logger
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics
 
 import gloving.WordVectorRDD._
+import VectorImplicits._
 
 object Evaluate {
   @transient lazy val logger = Logger(LoggerFactory.getLogger(getClass.getName))
 
   case class CliOptions(questionFilesPath: File = null,
     vectorUrls: Seq[URI] = Seq(),
+    normalized: Boolean = false,
     outputUrl: URI = new URI("./vector-evaluation.json"))
 
   def main(args: Array[String]) {
@@ -37,6 +39,8 @@ object Evaluate {
         c.copy(questionFilesPath = x) } text("Name of directory containing analogy problem question files")
       arg[URI]("vector file [vector file...]") unbounded() required() action { (x, c) =>
         c.copy(vectorUrls = c.vectorUrls :+ x) } text("URLs or paths to vector files created by the load command")
+      opt[Unit]('n', "normalized") optional() action { (x, c) =>
+        c.copy(normalized = true) } text("Assume the vector files are normalized.  Evaluation is MUCH faster on normalized vectors.")
       opt[URI]('o', "output") optional() action { (x, c) =>
         c.copy(outputUrl = x) } text("Path and file name to which the evaluation JSON file is written")
     }
@@ -63,7 +67,7 @@ object Evaluate {
 
       logger.info(s"Evaluating vectors $name")
 
-      val results = evaluate(words, analogyProblems)
+      val results = evaluate(config, words, analogyProblems)
 
       words.unpersist()
 
@@ -84,13 +88,21 @@ object Evaluate {
     logger.info(s"Wrote analysis to $file")
   }
 
-  def evaluate(words: WordVectorRDD, problemSet: Map[String, Seq[AnalogyProblem]]): VectorEvaluation = {
+  def evaluate(config: CliOptions, words: WordVectorRDD, problemSet: Map[String, Seq[AnalogyProblem]]): VectorEvaluation = {
     //Most words in the problem set appear in many problems.  As an optimization, look up the word vectors of all of the words
     //up front in one operation
     val wordVectors = words.findWords(getUniqueWords(problemSet))
 
+    if (config.normalized) {
+      //The vectors are expected to be normalized.  It's not practical to check them all, but at least hceck the first one
+      wordVectors.headOption.map { case (key, wv) =>
+        require(wv.vector.isNormalized,
+          s"Expecting the vector file ${words.name} to be normalized, but the vector for word '${wv.word}' has a norm of ${wv.vector.computeNorm()}!")
+      }
+    }
+
     val results: Iterable[AnalogyResults] = problemSet.map { case (name, problems) =>
-      computeAnalogyResults(solveAnalogyProblems(words, wordVectors, problems),
+      computeAnalogyResults(solveAnalogyProblems(config, words, wordVectors, problems),
         name)
     }
 
@@ -144,7 +156,7 @@ object Evaluate {
     AlgorithmAnalogyPerformance(accuracy, stats, correctStats, incorrectStats)
   }
 
-  def solveAnalogyProblems(words: WordVectorRDD, wordVectors: Map[String, WordVector], problems: Seq[AnalogyProblem]): Seq[AnalogyResult] = {
+  def solveAnalogyProblems(config: CliOptions, words: WordVectorRDD, wordVectors: Map[String, WordVector], problems: Seq[AnalogyProblem]): Seq[AnalogyResult] = {
     //Make an array of all of the AnalogyProblem items, and the vector whose nearest neighbor is expected to be the answer to that problem
     val problemsWithVector: Array[(AnalogyProblem, DenseVector[Double])] = problems.map(x => (x, computeQueryVector(wordVectors, x)))
       .flatMap { case (problem, vector) =>
@@ -160,7 +172,15 @@ object Evaluate {
 
     //Make an array of distance functions, one for each problem
     val euclideanDistanceFunctions: Array[DenseVector[Double] => Double] = problemsWithVector.map { case (_, vector) => WordVectorRDD.euclideanDistance(vector) }
-    val cosineDistanceFunctions: Array[DenseVector[Double] => Double] = problemsWithVector.map { case (_, vector) => WordVectorRDD.cosineSimilarity(vector) }
+    val cosineDistanceFunctions: Array[DenseVector[Double] => Double] = problemsWithVector.map { case (_, vector) =>
+      if (config.normalized) {
+        //We assume all of the vectors in the RDD are normalized.  Query vectors are not necessarily normalized, so
+        //normalize them first
+        WordVectorRDD.normalizedCosineSimilarity(vector.normalize)
+      } else {
+        WordVectorRDD.cosineSimilarity(vector)
+      }
+    }
 
     //Run the queries.
     val euclideanResults = words.findNearestMulti(1,
