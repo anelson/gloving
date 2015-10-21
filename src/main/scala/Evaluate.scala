@@ -11,16 +11,13 @@ import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 
-import org.apache.spark.mllib.clustering.{KMeans, KMeansModel}
-import org.apache.spark.mllib.linalg.{Vectors, Vector}
+import breeze.linalg.DenseVector
 
 import play.api.libs.json._
 import play.api.libs.json.Json._
 
 import org.slf4j.LoggerFactory
 import com.typesafe.scalalogging.slf4j.Logger
-
-import net.sf.ehcache.{CacheManager,Ehcache,Cache,Element}
 
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics
 
@@ -58,9 +55,6 @@ object Evaluate {
     val analogyProblems = config.questionFilesPath.listFiles.filter(_.isFile).map { file =>
       (file.getName -> AnalogyProblem.fromTextFile(file.toURI))
     }.toMap
-
-    // val cm = CacheManager.newInstance(getClass().getResource("/ehcache.xml"))
-    // val cache = cm.getCache("words")
 
     val resultsMap = config.vectorUrls.map { vectorUrl =>
       val name = new File(vectorUrl.getPath()).getName
@@ -152,7 +146,7 @@ object Evaluate {
 
   def solveAnalogyProblems(words: WordVectorRDD, wordVectors: Map[String, WordVector], problems: Seq[AnalogyProblem]): Seq[AnalogyResult] = {
     //Make an array of all of the AnalogyProblem items, and the vector whose nearest neighbor is expected to be the answer to that problem
-    val problemsWithVector: Array[(AnalogyProblem, Vector)] = problems.map(x => (x, computeQueryVector(wordVectors, x)))
+    val problemsWithVector: Array[(AnalogyProblem, DenseVector[Double])] = problems.map(x => (x, computeQueryVector(wordVectors, x)))
       .flatMap { case (problem, vector) =>
         vector match {
           case None => {
@@ -165,8 +159,8 @@ object Evaluate {
       }.toArray
 
     //Make an array of distance functions, one for each problem
-    val euclideanDistanceFunctions: Array[Vector => Double] = problemsWithVector.map { case (_, vector) => WordVectorRDD.euclideanDistance(vector) }
-    val cosineDistanceFunctions: Array[Vector => Double] = problemsWithVector.map { case (_, vector) => WordVectorRDD.cosineSimilarity(vector) }
+    val euclideanDistanceFunctions: Array[DenseVector[Double] => Double] = problemsWithVector.map { case (_, vector) => WordVectorRDD.euclideanDistance(vector) }
+    val cosineDistanceFunctions: Array[DenseVector[Double] => Double] = problemsWithVector.map { case (_, vector) => WordVectorRDD.cosineSimilarity(vector) }
 
     //Run the queries.
     val euclideanResults = words.findNearestMulti(1,
@@ -197,7 +191,7 @@ object Evaluate {
   is the query vector.  Computing it requires looking up the vectors for the three words which define the analogy problem
   any one of those words might not appear in the word vectors model, in which case there can be no query vector, which is why
   this returns Option */
-  def computeQueryVector(wordVectors: Map[String, WordVector], problem: AnalogyProblem): Option[Vector] = {
+  def computeQueryVector(wordVectors: Map[String, WordVector], problem: AnalogyProblem): Option[DenseVector[Double]] = {
     import gloving.VectorImplicits._
 
     for (exampleSrc <- wordVectors.get(problem.example.source);

@@ -15,7 +15,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 
 import org.apache.spark.mllib.clustering.{KMeans, KMeansModel}
-import org.apache.spark.mllib.linalg.{Vectors, Vector}
+import org.apache.spark.mllib.linalg.{Vectors}
 
 import play.api.libs.json._
 import play.api.libs.json.Json._
@@ -25,7 +25,7 @@ import com.typesafe.scalalogging.slf4j.Logger
 
 class WordVectorKMeansClusterer(val words: WordVectorRDD) {
   @transient lazy val logger = Logger(LoggerFactory.getLogger(getClass.getName))
-  val nakedVectors = words.map(_.vector).persist().setName(s"${words.name}-nakedVectors")
+  val nakedVectors = words.map(w => Vectors.dense(w.vector.toArray)).persist().setName(s"${words.name}-nakedVectors")
   val count = nakedVectors.count()
 
   def unpersist() { nakedVectors.unpersist() }

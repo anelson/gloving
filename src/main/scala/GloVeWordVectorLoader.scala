@@ -8,7 +8,8 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.util.StatCounter
 
 import org.apache.spark.mllib.clustering.{KMeans, KMeansModel}
-import org.apache.spark.mllib.linalg.{Vectors, Vector}
+
+import breeze.linalg.DenseVector
 
 import org.slf4j.LoggerFactory
 import com.typesafe.scalalogging.slf4j.Logger
@@ -20,7 +21,7 @@ class GloVeWordVectorLoader(val path: URI) extends WordVectorLoader {
     val tuples = readTuples(sc, path)
 
     val name = new File(path.getPath()).getName
-    new WordVectorRDD(tuples.map { case(index, word, vector) => WordVector(index, word, Vectors.dense(vector)) })
+    new WordVectorRDD(tuples.map { case(index, word, vector) => WordVector(index, word, DenseVector[Double](vector)) })
       .setName(s"$name-wordvectors")
   }
 

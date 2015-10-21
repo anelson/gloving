@@ -17,6 +17,9 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.mllib.clustering.{KMeans, KMeansModel}
 import org.apache.spark.mllib.linalg.{Vectors, Vector}
 
+import breeze.linalg.DenseVector
+import breeze.linalg.functions.{euclideanDistance, cosineDistance}
+
 import play.api.libs.json._
 import play.api.libs.json.Json._
 
@@ -34,21 +37,21 @@ class WordVectorKMeansModel(val words: WordVectorRDD, val model: KMeansModel) {
     val bModel = sc.broadcast(model)
 
     //Classify every vector in the set using this model
-    val clusteredWords = words.map(v => (bModel.value.predict(v.vector), v.vector)).cache().setName(s"${words.name}-clusteredWords")
+    val clusteredWords = words.map { wv =>
+      //TODO: refactor this so it doesn't incurr an array copy
+      val clusterCenterIndex = bModel.value.predict(Vectors.dense(wv.vector.data))
+      val clusterCenterVector = bModel.value.clusterCenters(clusterCenterIndex)
+
+
+      (DenseVector[Double](clusterCenterVector.toArray), wv.vector)
+    }.cache().setName(s"${words.name}-clusteredWords")
 
     val distanceToCentroid = clusteredWords.map{ case(cluster, vector) =>
-      val centroid = bModel.value.clusterCenters(cluster)
-      math.sqrt(Vectors.sqdist(vector, centroid))
+      euclideanDistance(vector, cluster)
     }.mean()
 
     val cosineDistance = clusteredWords.map{ case(cluster, vector) =>
-      val centroid = bModel.value.clusterCenters(cluster)
-
-      val dotProduct = centroid.toArray.zip(vector.toArray).map(pair => pair._1 * pair._2).sum
-      val magProduct = Vectors.norm(centroid, 2.0) * Vectors.norm(vector, 2.0)
-      val cosineDistance = dotProduct / magProduct
-
-      cosineDistance
+      breeze.linalg.functions.cosineDistance(cluster, vector)
     }.mean()
 
     clusteredWords.unpersist()

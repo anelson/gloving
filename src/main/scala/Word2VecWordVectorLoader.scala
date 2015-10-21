@@ -17,7 +17,8 @@ import org.apache.spark.storage.StorageLevel
 import org.apache.spark.util.StatCounter
 
 import org.apache.spark.mllib.clustering.{KMeans, KMeansModel}
-import org.apache.spark.mllib.linalg.{Vectors, Vector}
+
+import breeze.linalg.DenseVector
 
 import org.slf4j.LoggerFactory
 import com.typesafe.scalalogging.slf4j.Logger
@@ -103,7 +104,7 @@ class Word2VecWordVectorLoader(val path: URI) extends WordVectorLoader {
         values(dim) = value.toDouble
       }
 
-      WordVector(wordIndex, word, Vectors.dense(values))
+      WordVector(wordIndex, word, DenseVector[Double](values))
     }
   }
 

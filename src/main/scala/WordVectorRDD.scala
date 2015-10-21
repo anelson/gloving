@@ -11,8 +11,9 @@ import org.apache.spark.sql.SaveMode
 import org.apache.spark.rdd.RDD
 import org.apache.spark.util.StatCounter
 
-import org.apache.spark.mllib.clustering.{KMeans, KMeansModel}
-import org.apache.spark.mllib.linalg.{Vectors, Vector}
+import org.apache.spark.mllib.linalg.{ DenseVector => SDenseVector }
+
+import breeze.linalg.DenseVector
 
 import org.slf4j.LoggerFactory
 import com.typesafe.scalalogging.slf4j.Logger
@@ -55,7 +56,7 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
 
   def computeNormStatistics(histogramBins: Int): Statistics = {
     //Someday I'll figure how to compute median and IQR within Spark and this won't hurt so bad
-    val norms = rdd.map { wv => Vectors.norm(wv.vector, 2.0) }
+    val norms = rdd.map { wv => breeze.linalg.norm(wv.vector, 2) }
     val desc = new DescriptiveStatistics(norms.collect())
     Statistics.fromDescriptiveStatistics(desc, histogramBins)
   }
@@ -116,7 +117,7 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
     }
   }
 
-  def findNearest(n: Int, distanceFunction: (Vector) => Double, lowerIsBetter: Boolean): Array[(WordVector, Double)] = {
+  def findNearest(n: Int, distanceFunction: (DenseVector[Double]) => Double, lowerIsBetter: Boolean): Array[(WordVector, Double)] = {
     //Compute the distance between this vector and all the word vectors
     val distances: RDD[(WordVector, Double)] = rdd.map { wv =>
       val distance = distanceFunction(wv.vector)
@@ -138,7 +139,7 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
 
   /** Finds the nearest n words for multiple distance functions in parallel.  This may be more efficient than querying one at a time
   if you have a lot of these nearest queries to perform */
-  def findNearestMulti(n: Int, distanceFunctions: Array[(Vector) => Double], lowerIsBetter: Boolean): Array[Array[(WordVector, Double)]] = {
+  def findNearestMulti(n: Int, distanceFunctions: Array[(DenseVector[Double]) => Double], lowerIsBetter: Boolean): Array[Array[(WordVector, Double)]] = {
     require(n > 0)
 
     import gloving.Top._
@@ -200,23 +201,27 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
     }
   }
 
-  def findNearestEuclidean(vector: Vector, n: Int): Array[(WordVector, Double)] = findNearest(n, WordVectorRDD.euclideanDistance(vector), true)
+  def findNearestEuclidean(vector: DenseVector[Double], n: Int): Array[(WordVector, Double)] = findNearest(n, WordVectorRDD.euclideanDistance(vector), true)
 
-  def findNearestCosine(vector: Vector, n: Int): Array[(WordVector, Double)] = {
+  def findNearestCosine(vector: DenseVector[Double], n: Int): Array[(WordVector, Double)] = {
     findNearest(n, WordVectorRDD.cosineSimilarity(vector), false)
   }
 
   def save(path: URI, mode: SaveMode = SaveMode.Overwrite) {
+    //Note we save as a Spark vector since Breeze vectors can't serialzie
+    import VectorImplicits._
+
     val sqlContext = new SQLContext(rdd.context)
     import sqlContext.implicits._
 
     logger.info(s"Saving ${name} to $path")
-    rdd.toDF().write.mode(mode).format("parquet").save(path.toString())
+    rdd.map(wv => (wv.index, wv.word, wv.vector.toSpark)).toDF().write.mode(mode).format("parquet").save(path.toString())
   }
 }
 
 object WordVectorRDD {
   import VectorImplicits._
+  import breeze.linalg.functions._
 
   implicit def RDD2WordVectorRDD(value: RDD[WordVector]): WordVectorRDD = {
     new WordVectorRDD(value)
@@ -229,18 +234,21 @@ object WordVectorRDD {
     else { (wv: WordVector) => wv.word.equalsIgnoreCase(word) }
   }
 
-  def euclideanDistance(v1: Vector): Vector => Double = (v2: Vector) => Math.sqrt(Vectors.sqdist(v1, v2))
+  def euclideanDistance(v1: DenseVector[Double]): DenseVector[Double] => Double = {
+    (v2: DenseVector[Double]) => breeze.linalg.functions.euclideanDistance(v1, v2)
+  }
 
-  def cosineSimilarity(v1: Vector): Vector => Double = {
-    val norm = Vectors.norm(v1, 2.0)
+  def cosineSimilarity(v1: DenseVector[Double]): DenseVector[Double] => Double = {
+    val norm = breeze.linalg.norm(v1, 2)
 
-    (v2: Vector) => ( v1 dot v2) / (norm * Vectors.norm(v2, 2.0))
+    (v2: DenseVector[Double]) => (v1 dot v2) / (norm * breeze.linalg.norm(v2, 2))
   }
 
 	def load(sc: SparkContext, path: URI): WordVectorRDD = {
     val name = new File(path.getPath()).getName
     val sqlContext = new SQLContext(sc)
-    sqlContext.read.parquet(path.toString()).map(row => WordVector.apply(row.getLong(0), row.getString(1), row.getAs[Vector](2)))
+    sqlContext.read.parquet(path.toString())
+      .map(row => WordVector.apply(row.getLong(0), row.getString(1), row.getAs[SDenseVector](2).toBreeze))
       .setName(s"$name-wordvectors")
 	}
 

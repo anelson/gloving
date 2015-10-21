@@ -1,60 +1,47 @@
 package gloving
 
-import com.github.fommil.netlib.{BLAS => NetlibBLAS, F2jBLAS}
-
-import org.apache.spark.mllib.linalg.{Vectors, Vector, DenseVector}
+import breeze.linalg.{ DenseVector => BDenseVector }
+import org.apache.spark.mllib.linalg.{ DenseVector => SDenseVector }
 
 object VectorImplicits {
-	@transient private var _f2jBLAS: NetlibBLAS = _
+	implicit def sparkToBreezeVector(v: SDenseVector): BDenseVector[Double] = {
+		//As of this writing, toArray just returns the immutable array backing the vector, so this should be a cheap operation
+		BDenseVector(v.toArray)
+	}
 
-	/** These two methods I stolre from org.apache.spark.mllib.linalgBLAS, which for some reason is private so I can't use it directly */
-	private def f2jBLAS: NetlibBLAS = {
-    if (_f2jBLAS == null) {
-      _f2jBLAS = new F2jBLAS
-    }
-    _f2jBLAS
-  }
+	implicit def breezeToSparkVector(v: BDenseVector[Double]): SDenseVector = {
+		new SDenseVector(v.data)
+	}
 
-  def dot(x: Vector, y: Vector): Double = {
-    require(x.size == y.size,
-      "BLAS.dot(x: Vector, y:Vector) was given Vectors with non-matching sizes:" +
-      " x.size = " + x.size + ", y.size = " + y.size)
-    (x, y) match {
-      case (dx: DenseVector, dy: DenseVector) =>
-        dot(dx, dy)
-      case _ =>
-        throw new IllegalArgumentException(s"dot doesn't support (${x.getClass}, ${y.getClass}).")
-    }
-  }
+	implicit class PimpedSparkVector(val vector: SDenseVector) extends AnyVal {
+		def toBreeze: BDenseVector[Double] = { vector }
+	}
 
-  private def dot(x: DenseVector, y: DenseVector): Double = {
-    val n = x.size
-    f2jBLAS.ddot(n, x.values, 1, y.values, 1)
-  }
+	implicit class PimpedVector(val vector: BDenseVector[Double]) extends AnyVal {
+		def toSpark: SDenseVector = { vector }
 
-	implicit class PimpedVector(val vector: Vector) extends AnyVal {
-		def -(that: PimpedVector): Vector = {
+		def -(that: PimpedVector): BDenseVector[Double] = {
 			assert(vector.size == that.vector.size)
 
 			elementsizeOp(that, (x, y) => x - y)
 		}
 
-		def +(that: PimpedVector): Vector = {
+		def +(that: PimpedVector): BDenseVector[Double] = {
 			assert(vector.size == that.vector.size)
 
 			elementsizeOp(that, (x, y) => x + y)
 		}
 
 		def dot(that: PimpedVector): Double = {
-			VectorImplicits.dot(vector, that.vector)
+			vector dot that.vector
 		}
 
-		def elementsizeOp(that: PimpedVector, op: (Double, Double) => Double): Vector = {
+		def elementsizeOp(that: PimpedVector, op: (Double, Double) => Double): BDenseVector[Double] = {
 			assert(vector.size == that.vector.size)
 
 			val resultArray = Array.tabulate(vector.size) { i: Int => op(vector(i), that.vector(i)) }
 
-			Vectors.dense(resultArray)
+			new BDenseVector(resultArray)
 		}
 	}
 }

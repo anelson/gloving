@@ -2,6 +2,8 @@ package gloving
 
 import org.apache.spark.SparkConf
 
+import breeze.linalg.DenseVector
+
 object SparkHelpers {
 	def config(conf: SparkConf): SparkConf = {
 		//Use the Kryo serializer for better memory efficiency
@@ -13,6 +15,13 @@ object SparkHelpers {
 			classOf[(WordVector, Double)],
 			classOf[Array[WordVector]],
 			classOf[Array[(WordVector, Double)]]
+			)
+		)
+
+		//Now register Breeze classes
+		newConf.registerKryoClasses(Array(
+			classOf[DenseVector[Double]],
+			Class.forName("breeze.linalg.DenseVector$mcD$sp")
 			)
 		)
 

@@ -20,8 +20,6 @@ import play.api.libs.json.Json._
 import org.slf4j.LoggerFactory
 import com.typesafe.scalalogging.slf4j.Logger
 
-import net.sf.ehcache.{CacheManager,Ehcache,Cache,Element}
-
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics
 
 import gloving.WordVectorRDD._
