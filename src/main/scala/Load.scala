@@ -44,7 +44,7 @@ object Load {
     val config = optParser.parse(args, CliOptions()).get
 
     val conf = new SparkConf().setAppName("gloving-loader")
-    val sc = new SparkContext(conf)
+    val sc = new SparkContext(SparkHelpers.config(conf))
 
     val handler = (name: String, words: WordVectorRDD) => load(name, words, config)
     config.format match {
