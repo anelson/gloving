@@ -47,6 +47,7 @@ case class AnalogyResult(problem: AnalogyProblem,
   cosineAnswer: WordDistance)
 
 case class AlgorithmAnalogyPerformance(accuracy: Double,
+  runtimeSeconds: Double,
   stats: Statistics,
   correctStats: Statistics,
   incorrectStats: Statistics)

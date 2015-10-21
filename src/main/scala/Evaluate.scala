@@ -102,20 +102,20 @@ object Evaluate {
     }
 
     val results: Iterable[AnalogyResults] = problemSet.map { case (name, problems) =>
-      computeAnalogyResults(solveAnalogyProblems(normalized, words, wordVectors, problems),
-        name)
+      val (euclideanRuntime, cosineRuntime, results) = solveAnalogyProblems(normalized, words, wordVectors, problems)
+      computeAnalogyResults(euclideanRuntime, cosineRuntime, results, name)
     }
 
     VectorEvaluation(results.toSeq)
   }
 
-  def computeAnalogyResults(results: Seq[AnalogyResult], name: String): AnalogyResults = {
+  def computeAnalogyResults(euclideanRuntime: Double, cosineRuntime: Double, results: Seq[AnalogyResult], name: String): AnalogyResults = {
     //Compute the aggregate statistics for all of the problems
     val euclideanResults = results.map(r => (r.problem.test.target, r.euclideanAnswer))
-    val euclideanPerformance = computeAlgorithmPerformance(euclideanResults)
+    val euclideanPerformance = computeAlgorithmPerformance(euclideanRuntime, euclideanResults)
 
     val cosineResults = results.map(r => (r.problem.test.target, r.cosineAnswer))
-    val cosinePerformance = computeAlgorithmPerformance(cosineResults)
+    val cosinePerformance = computeAlgorithmPerformance(cosineRuntime, cosineResults)
 
     val incorrectResults = results
       .filter(result => !result.problem.test.target.equalsIgnoreCase(result.euclideanAnswer.word) || !result.problem.test.target.equalsIgnoreCase(result.cosineAnswer.word))
@@ -129,7 +129,7 @@ object Evaluate {
 
   /** Given a list of expected answers, actual answers, and distances, computes the accuracy, and statistical distribuion
   of the distances overall, correct, and incorrect */
-  def computeAlgorithmPerformance(results: Seq[(String, WordDistance)]): AlgorithmAnalogyPerformance = {
+  def computeAlgorithmPerformance(runtime: Double, results: Seq[(String, WordDistance)]): AlgorithmAnalogyPerformance = {
     val correctResults = results.filter(r => r._1.equalsIgnoreCase(r._2.word))
     val incorrectResults = results.filter(r => !r._1.equalsIgnoreCase(r._2.word))
 
@@ -153,10 +153,10 @@ object Evaluate {
       case _ => Statistics.empty
     }
 
-    AlgorithmAnalogyPerformance(accuracy, stats, correctStats, incorrectStats)
+    AlgorithmAnalogyPerformance(accuracy, runtime, stats, correctStats, incorrectStats)
   }
 
-  def solveAnalogyProblems(normalized: Boolean, words: WordVectorRDD, wordVectors: Map[String, WordVector], problems: Seq[AnalogyProblem]): Seq[AnalogyResult] = {
+  def solveAnalogyProblems(normalized: Boolean, words: WordVectorRDD, wordVectors: Map[String, WordVector], problems: Seq[AnalogyProblem]): (Double, Double, Seq[AnalogyResult]) = {
     //Make an array of all of the AnalogyProblem items, and the vector whose nearest neighbor is expected to be the answer to that problem
     val problemsWithVector: Array[(AnalogyProblem, DenseVector[Double])] = problems.map(x => (x, computeQueryVector(wordVectors, x)))
       .flatMap { case (problem, vector) =>
@@ -183,13 +183,17 @@ object Evaluate {
     }
 
     //Run the queries.
-    val euclideanResults = words.findNearestMulti(1,
+    val (euclideanResults, euclideanRuntime) = time {
+      words.findNearestMulti(1,
         euclideanDistanceFunctions,
         true)
+    }
 
-    val cosineResults = words.findNearestMulti(1,
+    val (cosineResults, cosineRuntime) = time {
+      words.findNearestMulti(1,
         cosineDistanceFunctions,
         false)
+    }
 
     //Combine the results and build the AnalogyResult objects
     val completedResults = problems.zip(euclideanResults.zip(cosineResults)).map { case (problem, (euclideanResult, cosineResult)) =>
@@ -204,7 +208,7 @@ object Evaluate {
         WordDistance("", 0.0))
     }
 
-    completedResults ++ incompletedResults
+    (euclideanRuntime, cosineRuntime, completedResults ++ incompletedResults)
   }
 
   /* when we do an analogy problem like 'king' - 'man' + 'woman', the vector computed by that vector arithmetic
@@ -233,5 +237,20 @@ object Evaluate {
     }
 
     words.toSet
+  }
+
+  def time[R](block: => R): (R, Double) = {
+    val NanoPerMicro: Double = 1000
+    val NanoPerMilli: Double = 1000 * NanoPerMicro
+    val NanoPerSecond: Double = 1000 * NanoPerMilli
+
+    val t0 = System.nanoTime()
+    val result = block
+    val t1 = System.nanoTime()
+
+    val nanoSeconds = t1 - t0
+    val seconds = nanoSeconds.toDouble / NanoPerSecond
+
+    (result, seconds)
   }
 }
