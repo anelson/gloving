@@ -64,29 +64,56 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
     rdd.map(_.normalize)
   }
 
-  def findWord(word: String):  Option[WordVector] = {
-    //rdd.filter(_.word == word).take(1).headOption
-    rdd.filter(_.word.equalsIgnoreCase(word)).take(1).headOption
+  def find(predicate: (WordVector) => Boolean): WordVectorRDD = {
+    rdd.filter(predicate)
+  }
+
+  /** Performs a search for the word, matching without regard to case unless caseSensitive is set to true. */
+  def findWord(word: String, caseSensitive: Boolean = false):  Option[WordVector] = {
+    val filterFunction: (WordVector) => Boolean =
+      if (caseSensitive) { (wv: WordVector) => wv.word == word }
+      else { (wv: WordVector) => wv.word.equalsIgnoreCase(word) }
+
+    val matches = find(WordVectorRDD.stringMatch(word, caseSensitive)).collect()
+
+    //In almost all cases, there is only one match.  However in the event of an ambiguity, use the one
+    //with the lowest index value.  That should mean it's the more common one, which is probably what the caller wants
+    matches.length match {
+      case 0 => None
+      case 1 => Some(matches.head)
+      case x => Some(matches.minBy(_.index))
+    }
   }
 
   /* In Scala, as in life, vectorization is critical to good performance.  Word lookups are expensive, so
   its better to do them all at once.  This vectorized version of findWord looks up a bunch of words, and returns a
   map mapping the words to the corresponding WordVector.  If one of the words isn't found, it simply doesn't appear in
   the map */
-  def findWords(words: Set[String]): Map[String, WordVector] = {
+  def findWords(words: Set[String], caseSensitive: Boolean = false): Map[String, WordVector] = {
     val bWords = rdd.context.broadcast(words)
 
-    val wordMap = rdd.filter(wv => bWords.value.contains(wv.word)).map( wv => (wv.word, wv)).collect().toMap
+    val filterFunction: (WordVector) => Boolean =
+      if (caseSensitive) {  (wv: WordVector) => bWords.value.contains(wv.word) }
+      else { (wv: WordVector) => bWords.value.exists(word => wv.word.equalsIgnoreCase(word)) }
+
+    val mapFunction: (WordVector) => (String, WordVector) =
+      if (caseSensitive) {  (wv: WordVector) => (wv.word, wv) }
+      else { (wv: WordVector) => (bWords.value.find(word => wv.word.equalsIgnoreCase(word)).get, wv) }
+
+    val wordMap: Array[(String, WordVector)] = find(filterFunction).map(mapFunction).collect()
 
     bWords.unpersist
 
-    words.foreach { word =>
-      if (!wordMap.contains(word)) {
-        logger.error(s"WTF!  Could not find word '$word' in ${rdd.name}")
-      }
+    //For case-sensitive matches, we're done.  For case-insensitive, wordMap could have multiple matches for each word,
+    //with different cases.  For each word we must choose the most appropriate match
+    if (caseSensitive) {
+      wordMap.toMap
+    } else {
+      wordMap.groupBy(_._1).map { case (word, matches) =>
+        //A given word can have multiple matches.  Pick the match that has the lowest index
+        (word, matches.minBy(_._2.index)._2)
+      }.toMap
     }
-
-    wordMap
   }
 
   def findNearest(n: Int, distanceFunction: (Vector) => Double, lowerIsBetter: Boolean): Array[(WordVector, Double)] = {
@@ -196,6 +223,11 @@ object WordVectorRDD {
   }
 
   implicit def WordVectorRDD2RDD(value: WordVectorRDD): RDD[WordVector] = value.rdd
+
+  def stringMatch(word: String, caseSensitive: Boolean = false): (WordVector) => Boolean = {
+    if (caseSensitive) { (wv: WordVector) => wv.word == word }
+    else { (wv: WordVector) => wv.word.equalsIgnoreCase(word) }
+  }
 
   def euclideanDistance(v1: Vector): Vector => Double = (v2: Vector) => Math.sqrt(Vectors.sqdist(v1, v2))
 
