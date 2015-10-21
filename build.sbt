@@ -31,7 +31,7 @@ javacOptions ++= Seq("-source", "1.7", "-target", "1.7")
 javaOptions ++= Seq("-Xmx2G")
 
 // append -deprecation to the options passed to the Scala compiler
-scalacOptions ++= Seq("-deprecation", "-unchecked")
+scalacOptions ++= Seq("-deprecation", "-unchecked", "-feature", "-Xlint")
 
 // Use local repositories by default
 resolvers ++= Seq(
@@ -91,6 +91,8 @@ libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.4" % "test"
 
 libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.12.2" % "test"
 
+libraryDependencies += "com.storm-enroute" %% "scalameter" % "0.7" % "test"
+
 
 /// Compiler plugins
 
@@ -98,6 +100,10 @@ libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.12.2" % "test"
 resolvers += "Linter Repository" at "https://hairyfotr.github.io/linteRepo/releases"
 
 addCompilerPlugin("com.foursquare.lint" %% "linter" % "0.1.8")
+
+testFrameworks += new TestFramework("org.scalameter.ScalaMeterFramework")
+parallelExecution in Test := false
+logBuffered := false
 
 
 /// console
