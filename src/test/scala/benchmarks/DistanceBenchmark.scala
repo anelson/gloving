@@ -12,7 +12,7 @@ import gloving.WordVectorRDD
 trait DistanceBenchmark extends Bench.LocalTime {
   val ns = Gen.range("n")(50, 300, 50)
 	val random = new Random(42)
-  val NumberOfVectors = 100000
+  val NumberOfVectors = 10000
 
   def generateVectors(n: Int): (Array[Double], Array[Array[Double]]) = {
     val x1 = Array.fill(n)(random.nextDouble() * 20 - 10)
