@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-echo $SPARK_HOME/bin/spark-submit \
+$SPARK_HOME/bin/spark-submit \
 	--class gloving.Analyze \
 	--name "gloving-analyze" \
 	--master "local[*]" \
