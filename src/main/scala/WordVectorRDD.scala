@@ -67,8 +67,19 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
     rdd.map(_.normalize)
   }
 
-  def find(predicate: (WordVector) => Boolean): WordVectorRDD = {
-    rdd.filter(predicate)
+  def findAll(predicate: (WordVector) => Boolean): Array[WordVector] = {
+    rdd.filter(predicate).collect()
+  }
+
+  /** Finds the first n words which match the specified predicate, where the results are sorted
+  in ascending order of index, which means in descending order of popularity in the training corpus */
+  def find(predicate: (WordVector) => Boolean, n: Int): Seq[WordVector] = {
+    import Top._
+
+    //Use an ordering that considers index 1 to be higher than index 2.  An easy way to do this is negatve them
+    implicit val ordering: Ordering[WordVector] = Ordering.by(wv => -wv.index)
+
+    findAll(predicate).top(n)
   }
 
   /** Performs a search for the word, matching without regard to case unless caseSensitive is set to true. */
@@ -77,15 +88,11 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
       if (caseSensitive) { (wv: WordVector) => wv.word == word }
       else { (wv: WordVector) => wv.word.equalsIgnoreCase(word) }
 
-    val matches = find(WordVectorRDD.stringMatch(word, caseSensitive)).collect()
+    val matches = find(WordVectorRDD.stringMatch(word, caseSensitive), 1)
 
     //In almost all cases, there is only one match.  However in the event of an ambiguity, use the one
     //with the lowest index value.  That should mean it's the more common one, which is probably what the caller wants
-    matches.length match {
-      case 0 => None
-      case 1 => Some(matches.head)
-      case x => Some(matches.minBy(_.index))
-    }
+    matches.headOption
   }
 
   /* In Scala, as in life, vectorization is critical to good performance.  Word lookups are expensive, so
@@ -103,7 +110,7 @@ class WordVectorRDD(val rdd: RDD[WordVector]) extends Serializable {
       if (caseSensitive) {  (wv: WordVector) => (wv.word, wv) }
       else { (wv: WordVector) => (bWords.value.find(word => wv.word.equalsIgnoreCase(word)).get, wv) }
 
-    val wordMap: Array[(String, WordVector)] = find(filterFunction).map(mapFunction).collect()
+    val wordMap: Seq[(String, WordVector)] = findAll(filterFunction).map(mapFunction)
 
     bWords.unpersist
 
