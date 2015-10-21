@@ -112,7 +112,7 @@ object Evaluate {
     val cosinePerformance = computeAlgorithmPerformance(cosineResults)
 
     val incorrectResults = results
-      .filter(result => result.problem.test.target != result.euclideanAnswer.word || result.problem.test.target != result.cosineAnswer.word)
+      .filter(result => !result.problem.test.target.equalsIgnoreCase(result.euclideanAnswer.word) || !result.problem.test.target.equalsIgnoreCase(result.cosineAnswer.word))
 
     AnalogyResults(name,
       results.length,
