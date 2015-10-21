@@ -124,8 +124,8 @@ object Evaluate {
   /** Given a list of expected answers, actual answers, and distances, computes the accuracy, and statistical distribuion
   of the distances overall, correct, and incorrect */
   def computeAlgorithmPerformance(results: Seq[(String, WordDistance)]): AlgorithmAnalogyPerformance = {
-    val correctResults = results.filter(r => r._1 == r._2.word)
-    val incorrectResults = results.filter(r => r._1 != r._2.word)
+    val correctResults = results.filter(r => r._1.equalsIgnoreCase(r._2.word))
+    val incorrectResults = results.filter(r => !r._1.equalsIgnoreCase(r._2.word))
 
     val resultCount = results.length
     val accuracy = correctResults.length.toDouble / resultCount.toDouble
