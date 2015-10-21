@@ -93,16 +93,16 @@ object Evaluate {
     //up front in one operation
     val wordVectors = words.findWords(getUniqueWords(problemSet))
 
-    if (config.normalized) {
-      //The vectors are expected to be normalized.  It's not practical to check them all, but at least hceck the first one
-      wordVectors.headOption.map { case (key, wv) =>
-        require(wv.vector.isNormalized,
-          s"Expecting the vector file ${words.name} to be normalized, but the vector for word '${wv.word}' has a norm of ${wv.vector.computeNorm()}!")
-      }
+    //If the normalized option is enabled and the first word appears to be normalized, assume all are normalized
+    val normalized = config.normalized &&
+      wordVectors.headOption.map { case (key, wv) => wv.vector.isNormalized }.getOrElse(false)
+
+    if (normalized) {
+      logger.info(s"Assuming ${words.name} is a normalized model, enabling faster cosine similarity")
     }
 
     val results: Iterable[AnalogyResults] = problemSet.map { case (name, problems) =>
-      computeAnalogyResults(solveAnalogyProblems(config, words, wordVectors, problems),
+      computeAnalogyResults(solveAnalogyProblems(normalized, words, wordVectors, problems),
         name)
     }
 
@@ -156,7 +156,7 @@ object Evaluate {
     AlgorithmAnalogyPerformance(accuracy, stats, correctStats, incorrectStats)
   }
 
-  def solveAnalogyProblems(config: CliOptions, words: WordVectorRDD, wordVectors: Map[String, WordVector], problems: Seq[AnalogyProblem]): Seq[AnalogyResult] = {
+  def solveAnalogyProblems(normalized: Boolean, words: WordVectorRDD, wordVectors: Map[String, WordVector], problems: Seq[AnalogyProblem]): Seq[AnalogyResult] = {
     //Make an array of all of the AnalogyProblem items, and the vector whose nearest neighbor is expected to be the answer to that problem
     val problemsWithVector: Array[(AnalogyProblem, DenseVector[Double])] = problems.map(x => (x, computeQueryVector(wordVectors, x)))
       .flatMap { case (problem, vector) =>
@@ -173,7 +173,7 @@ object Evaluate {
     //Make an array of distance functions, one for each problem
     val euclideanDistanceFunctions: Array[DenseVector[Double] => Double] = problemsWithVector.map { case (_, vector) => WordVectorRDD.euclideanDistance(vector) }
     val cosineDistanceFunctions: Array[DenseVector[Double] => Double] = problemsWithVector.map { case (_, vector) =>
-      if (config.normalized) {
+      if (normalized) {
         //We assume all of the vectors in the RDD are normalized.  Query vectors are not necessarily normalized, so
         //normalize them first
         WordVectorRDD.normalizedCosineSimilarity(vector.normalize)
